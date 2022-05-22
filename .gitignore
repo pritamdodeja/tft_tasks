@@ -1,0 +1,7 @@
+# Ignore all test.py files
+test.py
+*.png
+__pycache__
+.ipynb_checkpoints
+working_area
+beam-temp*
