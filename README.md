@@ -5,16 +5,17 @@ A task based approach to using tensorflow transform.
 Usage instructions:
 
 ```
-python tft_tasks.py -h
+usage: tft_tasks.py [-h] --task TASKS
 
-Example: python taxi_pipeline_refactored.py --task transform_tfrecords --task train_and_predict_embedding_model
+A task based approach to using tensorflow transform.
 
 optional arguments:
   -h, --help    show this help message and exit
-  --task TASKS  Pick tasks from {'train_and_predict_embedding_model', 'view_transformed_sample_data', 'transform_tfrecords',
-                'write_raw_tfrecords', 'view_original_sample_data', 'train_non_embedding_model', 'clean_directory',
-                'train_embedding_model'}
-
+  --task TASKS  Pick tasks from {'train_embedding_model',
+                'train_and_predict_embedding_model', 'view_original_sample_data',
+                'write_raw_tfrecords', 'train_non_embedding_model',
+                'view_transformed_sample_data', 'clean_directory',
+                'transform_tfrecords'}
 ```
 
 To execute the full lifecycle, enter the below:
