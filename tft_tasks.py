@@ -15,11 +15,9 @@ import tensorflow_addons as tfa
 from tensorflow.keras import models
 from tensorflow.keras import layers
 import tensorflow as tf
-import numpy as np
 import matplotlib.pyplot as plt
 from pprint import pprint
 from tensorflow_transform.tf_metadata import schema_utils
-import pandas as pd
 import tempfile
 import logging
 import os
@@ -775,7 +773,7 @@ def get_args():
     parser = argparse.ArgumentParser(
         description="Select one or more tasks from the set below:")
     parser = argparse.ArgumentParser(
-        description="Example: python taxi_pipeline_refactored.py --task transform_tfrecords --task train_and_predict_embedding_model ")
+        description="A task based approach to using tensorflow transform.")
     parser.add_argument(
         '--task',
         dest='tasks',
