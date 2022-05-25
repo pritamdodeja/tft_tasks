@@ -16,15 +16,18 @@ from tensorflow.keras import models
 from tensorflow.keras import layers
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from pprint import pprint
 from tensorflow_transform.tf_metadata import schema_utils
 import tempfile
 import logging
 import os
+import pickle
+import collections
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 # set TF error log verbosity
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
 # print(tf.version.VERSION)
+
+
 # }}}
 # {{{ Constants
 CSV_COLUMNS = [
@@ -100,6 +103,20 @@ _SCHEMA = schema_utils.schema_from_feature_spec(RAW_DATA_FEATURE_SPEC)
 
 BATCH_SIZE = 8
 PREFIX_STRING = 'transformed_tfrecords'
+task_state_file_name = 'task_state.pkl'
+task_state_filepath = os.path.join(WORKING_DIRECTORY, task_state_file_name)
+
+
+def return_none():
+    return None
+
+
+if os.path.isfile(task_state_filepath):
+    with open(task_state_filepath, 'rb') as task_state_file:
+        task_state_dictionary = pickle.load(task_state_file)
+else:
+    task_state_dictionary = collections.defaultdict(return_none)
+
 # }}}
 # {{{ no preprocessing fn
 
@@ -243,7 +260,6 @@ def preprocessing_fn(inputs):
 
 # }}}
 # {{{ pipeline function
-
 def pipeline_function(prefix_string, preprocessing_fn):
     with beam.Pipeline() as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
@@ -295,16 +311,17 @@ def pipeline_function(prefix_string, preprocessing_fn):
                                                'transform_output')
             tfrecord_file_path_prefix = os.path.join(tfrecord_directory,
                                                      prefix_string)
-            _ = (transformed_data | 'EncodeTrainData' >> beam.FlatMapTuple(
+            data_written = (transformed_data | 'EncodeTrainData' >> beam.FlatMapTuple(
                 lambda batch, x: RecordBatchToExamples(batch)) |
                 # lambda x, y: y) |
                 #    "Logging info" >> beam.Map(_logging) )
                 'WriteTrainData' >> beam.io.WriteToTFRecord(
-                tfrecord_file_path_prefix))
+                tfrecord_file_path_prefix, ))
             _ = (
                 transform_fn
                 | "WriteTransformFn" >>
                 tft_beam.WriteTransformFn(transform_fn_output))
+            return True if data_written else False
 # }}}
 # {{{ Get tft_transform_output
 
@@ -351,26 +368,42 @@ def inspect_example(dictionary_of_tensors):
 # {{{ task functions
 
 
+# Pre-requisite: raw data is there
 def write_raw_tfrecords():
-    original_prefix_string = 'raw_tfrecords'
-    pipeline_function(prefix_string=original_prefix_string,
-                      preprocessing_fn=no_preprocessing_fn)
+    if task_state_dictionary["write_raw_tfrecords"] is None:
+        original_prefix_string = 'raw_tfrecords'
+        return_value = pipeline_function(prefix_string=original_prefix_string,
+                                         preprocessing_fn=no_preprocessing_fn)
+        task_state_dictionary["write_raw_tfrecords"] = True
 
 
+# Pre-requisite: raw data is there
 def transform_tfrecords():
     prefix_string = PREFIX_STRING
     pipeline_function(prefix_string=prefix_string,
                       preprocessing_fn=preprocessing_fn)
+    task_state_dictionary["transform_tfrecords"] = True
 
 
+# Pre-requisite: None
 def clean_directory():
     if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
         shutil.rmtree(WORKING_DIRECTORY)
     assert(not os.path.exists(WORKING_DIRECTORY))
     print(f"Directory {WORKING_DIRECTORY} no longer exists.")
+    for key in task_state_dictionary.keys():
+        task_state_dictionary[key] = None
 
 
+# Pre-requisite: Data has already been pre-processed
 def train_non_embedding_model():
+    task_prerequisites = task_dag['train_non_embedding_model']
+    if not check_prerequisites(task_prerequisites):
+        # Do pre-reqs
+        for task in task_prerequisites:
+            if not task_state_dictionary[task]:
+                perform_task(task)
+    assert(check_prerequisites(task_prerequisites))
     raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     tft_transform_output = get_tft_transform_output(
@@ -386,9 +419,18 @@ def train_non_embedding_model():
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
     non_embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    task_state_dictionary['train_non_embedding_model'] = True
 
 
+# Pre-requisite: Data has already been pre-processed
 def train_embedding_model():
+    task_prerequisites = task_dag['train_embedding_model']
+    if not check_prerequisites(task_prerequisites):
+        # Do pre-reqs
+        for task in task_prerequisites:
+            if not task_state_dictionary[task]:
+                perform_task(task)
+    assert(check_prerequisites(task_prerequisites))
     raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     tft_transform_output = get_tft_transform_output(
@@ -403,9 +445,26 @@ def train_embedding_model():
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
     embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    task_state_dictionary['train_embedding_model'] = True
+
+
+def check_prerequisites(task_prerequisites):
+    prerequisites_met = True
+    for task in task_prerequisites:
+        prerequisites_met = prerequisites_met and task_state_dictionary[task]
+    return prerequisites_met
+
+# Pre-requisite: raw tfrecords have been written
 
 
 def view_original_sample_data():
+    task_prerequisites = task_dag['view_original_sample_data']
+    if not check_prerequisites(task_prerequisites):
+        # Do pre-reqs
+        for task in task_prerequisites:
+            if not task_state_dictionary[task]:
+                perform_task(task)
+    assert(check_prerequisites(task_prerequisites))
     single_original_batch_example = get_single_batched_example(
         WORKING_DIRECTORY, prefix_string='raw_tfrecords')
     print('-' * 80)
@@ -414,7 +473,15 @@ def view_original_sample_data():
     inspect_example(single_original_batch_example)
 
 
+# Pre-requisite: transformed tfrecords have been written
 def view_transformed_sample_data():
+    task_prerequisites = task_dag['view_transformed_sample_data']
+    if not check_prerequisites(task_prerequisites):
+        # Do pre-reqs
+        for task in task_prerequisites:
+            if not task_state_dictionary[task]:
+                perform_task(task)
+    assert(check_prerequisites(task_prerequisites))
     prefix_string = PREFIX_STRING
     raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     single_original_batch_example = get_single_batched_example(
@@ -447,7 +514,15 @@ def view_transformed_sample_data():
     inspect_example(transformed_batch_example)
 
 
+# Raw tfrecords have been written, data has been preprocessed
 def train_and_predict_embedding_model():
+    task_prerequisites = task_dag['train_and_predict_embedding_model']
+    if not check_prerequisites(task_prerequisites):
+        # Do pre-reqs
+        for task in task_prerequisites:
+            if not task_state_dictionary[task]:
+                perform_task(task)
+    assert(check_prerequisites(task_prerequisites))
     raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     single_original_batch_example = get_single_batched_example(
@@ -464,6 +539,11 @@ def train_and_predict_embedding_model():
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
     embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    # Below statement is because of bug
+    layers.Lambda(
+        fn_seconds_since_1970,
+        name="seconds_since_1970")(
+        transformed_inputs['pickup_datetime'])
     end_to_end_model = build_end_to_end_model(
         raw_inputs,
         transformed_inputs,
@@ -471,7 +551,16 @@ def train_and_predict_embedding_model():
         prefix_string,
         embedding_model)
     print(end_to_end_model.predict(single_original_batch_example))
+    task_state_dictionary['train_and_predict_embedding_model'] = True
 
+
+def closeout_task(task_state_dictionary):
+    if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
+        with open(task_state_filepath, 'wb') as task_state_file:
+            pickle.dump(
+                task_state_dictionary,
+                task_state_file,
+                protocol=pickle.HIGHEST_PROTOCOL)
 
     # }}}
 # {{{ task dictionary
@@ -485,6 +574,16 @@ task_dictionary['view_original_sample_data'] = view_original_sample_data
 task_dictionary['view_transformed_sample_data'] = view_transformed_sample_data
 task_dictionary['train_and_predict_embedding_model'] = train_and_predict_embedding_model
 valid_tasks = set(task_dictionary.keys())
+
+task_dag = {key: [] for key in task_dictionary.keys()}
+task_dag['view_original_sample_data'].append('write_raw_tfrecords')
+task_dag['view_transformed_sample_data'].append('write_raw_tfrecords')
+task_dag['view_transformed_sample_data'].append('transform_tfrecords')
+task_dag['train_non_embedding_model'].append('transform_tfrecords')
+task_dag['train_embedding_model'].append('transform_tfrecords')
+task_dag['train_and_predict_embedding_model'].append('write_raw_tfrecords')
+task_dag['train_and_predict_embedding_model'].append('transform_tfrecords')
+
 # }}}
 # {{{ Perform task
 
@@ -783,8 +882,6 @@ def get_args():
     return parser.parse_args()
 # }}}
 # {{{ Main function
-
-
 def main(args):
     for task in args.tasks:
         if task not in valid_tasks:
@@ -792,8 +889,10 @@ def main(args):
             continue
         else:
             perform_task(task)
+    closeout_task(task_state_dictionary=task_state_dictionary)
 
-            # }}}
+
+    # }}}
 # {{{ Allow importing into other programs
 if __name__ == '__main__':
     args = get_args()
