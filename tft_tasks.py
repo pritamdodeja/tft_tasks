@@ -209,19 +209,8 @@ def preprocessing_fn(inputs):
     transformed['hashed_trip'] = hash_trip_crossing_layer(
         (hashed_pickup_intermediary,
          hashed_dropoff_intermediary))
-    # The two statements below need to go into the model itself because of
-    # initialization
-    # trip_locations_embedding_layer = tf.keras.layers.Embedding(input_dim=NBUCKETS**3, output_dim=int(NBUCKETS**1.5), name="trip_locations_embedding_layer")
-    # transformed['trip_locations_embedding'] = trip_locations_embedding_layer(transformed['hashed_trip'])
-    # new_hash_pickup_crossing_layer =tf.keras.layers.experimental.preprocessing.Hashing(output_mode='one_hot', num_bins=NBUCKETS**2, name='new_hash_pickup_crossing_layer')
 
-    # transformed['pickup_cross_one_hot_new'] = new_hash_pickup_crossing_layer(
-    #   transformed['pickup_cross'])
-
-    seconds_since_1970 = layers.Lambda(
-        fn_seconds_since_1970,
-        name="seconds_since_1970")(
-        inputs['pickup_datetime'])
+    seconds_since_1970 = fn_seconds_since_1970(inputs['pickup_datetime'])
     seconds_since_1970 = tf.cast(seconds_since_1970, tf.float32)
     hours_since_1970 = seconds_since_1970 / 3600.
     hours_since_1970 = tf.floor(hours_since_1970)
@@ -252,10 +241,6 @@ def preprocessing_fn(inputs):
         output_mode='one_hot', num_bins=(NBUCKETS ** 3) * 4, name='hash_trip_and_time_layer')
     transformed['hashed_trip_and_time'] = hash_trip_and_time_layer(
         (hashed_trip_intermediary, hour_of_day_of_week_intermediary))
-    # transformed[LABEL_COLUMN] = inputs[LABEL_COLUMN]
-
-    # transformed["pickup_longitude_one_hot"] = tf.one_hot(transformed["pickup_longitude_apply_buckets"],depth=NBUCKETS)
-    # transformed["pickup_cross_one_hot"] =tf.one_hot(transformed["pickup_cross"],depth=NBUCKETS**2)
     return transformed
 
 # }}}
@@ -492,14 +477,6 @@ def view_transformed_sample_data():
     TRANSFORMED_DATA_FEATURE_SPEC.pop(LABEL_COLUMN)
     transformed_inputs = build_transformed_inputs(
         TRANSFORMED_DATA_FEATURE_SPEC)
-    #seconds_since_1970 = layers.Lambda(fn_seconds_since_1970, name="seconds_since_1970")(transformed_inputs['pickup_datetime'])
-    # If the statement below is commented, this function does not work.
-    # Is this a violation of the integrity of the pipeline? Shouldn't the
-    # entire graph be loaded from disk without having to invoke this statement?
-    layers.Lambda(
-        fn_seconds_since_1970,
-        name="seconds_since_1970")(
-        transformed_inputs['pickup_datetime'])
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
         transformed_inputs)
     hashed_trip = build_keras_preprocessing_layers(keras_preprocessing_inputs)
@@ -539,11 +516,6 @@ def train_and_predict_embedding_model():
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
     embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
-    # Below statement is because of bug
-    layers.Lambda(
-        fn_seconds_since_1970,
-        name="seconds_since_1970")(
-        transformed_inputs['pickup_datetime'])
     end_to_end_model = build_end_to_end_model(
         raw_inputs,
         transformed_inputs,
