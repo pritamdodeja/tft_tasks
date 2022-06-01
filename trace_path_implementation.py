@@ -1,8 +1,13 @@
 # import inspect
 # from functools import wraps
 # import pydot
+import ipdb as set_trace
+from IPython import embed as ipython
 from trace_path import TracePath
 MyTracePath = TracePath(instrument=True)
+from watchpoints import watch
+watch(MyTracePath.counter_dictionary)
+
 @MyTracePath.inspect_function_execution
 def function_a(a, b, c=3):
     print(f"From function function_a.")
@@ -38,16 +43,18 @@ def function_d():
 def main():
     kangaroo = "kangaroo"
     # get_stack()
-    # function_a(1, 2, c=4)
+    function_a(1, 2, c=4)
     function_b()
     function_e()
-    function_c()
-    function_d()
-    function_c()
-    MyTracePath.parser_nested_dictionary(dictionary=MyTracePath.dict_writer())
-    MyTracePath.graph.write_jpeg('./new_oop_graph.jpg')
-
+    # function_c()
+    # function_d()
+    # function_c()
+    # set_trace.set_trace()
 
 
 if __name__ == '__main__':
     main()
+    print("Calling tree creator")
+    set_trace.set_trace()
+    MyTracePath.parser_nested_dictionary(dictionary=MyTracePath.dict_writer())
+    MyTracePath.graph.write_jpeg('./new_oop_graph.jpg')

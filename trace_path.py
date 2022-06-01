@@ -1,12 +1,20 @@
 import inspect
 from functools import wraps
 import pydot
+import time
+from collections import namedtuple
+import ipdb as set_trace
+from IPython import embed as ipython
+from queue import LifoQueue
+
 class TracePath:
     def __init__(self, instrument=True):
         self.instrument = instrument
         self.counter = 0
         self.counter_dictionary = {}
         self.counter_dictionary[0] = []
+        self.timing_dictionary = {}
+        self.timing_dictionary[0] = []
         self.graph = pydot.Dot("my_graph", graph_type="digraph", bgcolor="blue")
         self.execution_counter = 0
     def inspect_function_execution(self, func):
@@ -16,9 +24,17 @@ class TracePath:
                 caller = inspect.stack()[1].function
                 called = func.__name__
                 print(f"Caller: {caller}, Called: {called}")
+                function_mapping = namedtuple("function_mapping",
+                "caller called")
+                function_measurement = namedtuple("function_measurement",
+                "caller called elapsed_time")
+                local_mapping_tuple = function_mapping(caller, called)
+                timing_counter = self.counter
                 if caller == 'main':
                     self.counter = self.counter + 1
+                    timing_counter = self.counter
                     self.counter_dictionary[self.counter] = []
+                    self.timing_dictionary[self.counter] = []
 
                     # execution_tree[caller] = called
                     # execution_tree[caller] = dictionary_writer(caller, called)
@@ -30,7 +46,8 @@ class TracePath:
                     else:
                         print("Did not find it")
                         print(f"Non-main case {caller}")
-                self.counter_dictionary[self.counter].append((caller, called))
+
+                self.counter_dictionary[self.counter].append(local_mapping_tuple)
                         # throwaway_dict = collections.OrderedDict()
                         # throwaway_dict[caller] = called
                         # # execution_tree[caller] = throwaway_dict
@@ -38,18 +55,21 @@ class TracePath:
                         # Create new dictionary
                 # print(f"Type of caller is: {type(caller)}")
                 # print(f"Was called from: {inspect.stack()[1].function}.")
-                # print(f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}.")
-                # print(f"Executing function named: {func.__name__}")
+                print(f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}.")
+                print(f"Executing function named: {func.__name__}")
                 # print(f"From wrapper function: {func}")
-                # start_time = time.time()
+                start_time = time.time()
                 return_value = func(*args, **kwargs)
-                # end_time = time.time()
-                # elapsed_time = end_time - start_time
-                # print(f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds.")
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+                local_measurement_tuple = function_measurement(caller, called, elapsed_time)
+                self.timing_dictionary[timing_counter].append(local_measurement_tuple)
+                # self.counter_dictionary[self.counter].append(local_mapping_tuple)
+                print(f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds.")
                 
                 return return_value
             else:
-                return func(*args, **kwargs)
+                return func(*args, **kwargs) #Case where no instrumentation
         return _
 
     def new_tuple_writer(self, tuple_list):
@@ -58,16 +78,42 @@ class TracePath:
         for count in range(len(tuple_list) -1, -1, -1):
             # print(tuple_list[count])
             if current_dictionary == {}:
-                current_dictionary = {'name': tuple_list[count][1], 'children': []}
-                current_dictionary = {'name': tuple_list[count][0], 'children':[current_dictionary]}
+                # current_dictionary = {'name': tuple_list[count][1], 'children': []}
+                # current_dictionary = {'name': tuple_list[count][0], 'children':[current_dictionary]}
+                current_dictionary = {'name': tuple_list[count].called, 'children': []}
+                current_dictionary = {'name': tuple_list[count].caller, 'children':[current_dictionary]}
                 
             else:
-                current_dictionary = {'name': tuple_list[count][0], 'children':
+                # current_dictionary = {'name': tuple_list[count][0], 'children':
+                # [current_dictionary]}
+                current_dictionary = {'name': tuple_list[count].caller, 'children':
+                [current_dictionary]}
+            # return_dictionary = {'name': tuple_list[count][0],  'children': [current_dictionary]}
+        return current_dictionary
+
+    def timing_tuple_writer(self, tuple_list):
+        return_dictionary = {}
+        current_dictionary = {}
+        for count in range(len(tuple_list)):
+            # print(tuple_list[count])
+            if current_dictionary == {}:
+                # current_dictionary = {'name': tuple_list[count][1], 'children': []}
+                # current_dictionary = {'name': tuple_list[count][0], 'children':[current_dictionary]}
+                current_dictionary = {'name': tuple_list[count].called, 'children': []}
+                current_dictionary = {'name': tuple_list[count].caller,
+                'elapsed_time': tuple_list[count].elapsed_time, 'children':[current_dictionary]}
+                
+            else:
+                # current_dictionary = {'name': tuple_list[count][0], 'children':
+                # [current_dictionary]}
+                current_dictionary = {'name': tuple_list[count].caller,
+                'elapsed_time': tuple_list[count].elapsed_time, 'children':
                 [current_dictionary]}
             # return_dictionary = {'name': tuple_list[count][0],  'children': [current_dictionary]}
         return current_dictionary
 
     def dict_writer(self):
+        # set_trace.set_trace()
         return_dictionary = {}
         return_list = []
         current_dictionary = {}
@@ -76,6 +122,7 @@ class TracePath:
             # print(counter_dictionary[count])
             # print(tuple_writer(counter_dictionary[count]))
             current_dictionary = self.new_tuple_writer(self.counter_dictionary[count])
+            # set_trace.set_trace()
             # print(current_dictionary['name'] = f"main{count}")
             if current_dictionary['name'] == 'main':
                 # print("In here!")
@@ -85,6 +132,26 @@ class TracePath:
         return_dictionary = {'name': 'root', 'children': return_list}
         return return_dictionary
     
+    def timing_dict_writer(self):
+        # set_trace.set_trace()
+        return_dictionary = {}
+        return_list = []
+        current_dictionary = {}
+        for count in self.timing_dictionary.keys():
+            # print(count)
+            # print(counter_dictionary[count])
+            # print(tuple_writer(counter_dictionary[count]))
+            current_dictionary = self.timing_tuple_writer(self.timing_dictionary[count])
+            # set_trace.set_trace()
+            # print(current_dictionary['name'] = f"main{count}")
+            if current_dictionary['name'] == 'main':
+                # print("In here!")
+                current_dictionary['name'] = f"main{count}" 
+            print(current_dictionary)
+            return_list.append(current_dictionary)
+        return_dictionary = {'name': 'root', 'children': return_list}
+        return return_dictionary
+
     def parser_nested_dictionary(self, dictionary, parent_node_label=None):
         for key, value in dictionary.items():
             if key == 'name':
