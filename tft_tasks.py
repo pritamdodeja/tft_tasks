@@ -2,7 +2,9 @@
 # coding: utf-8
 # {{{ Imports
 # Goal: Implement taxicab fare prediction with a tft pipeline with safety checks
-# and a better flow.
+# and a simpler flow.
+from apache_beam.options.pipeline_options import PipelineOptions
+import sys
 import argparse
 import shutil
 import glob
@@ -25,6 +27,8 @@ import collections
 from functools import wraps
 import time
 import inspect
+from trace_path import TracePath
+MyTracePath = TracePath(instrument=True)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 # set TF error log verbosity
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
@@ -33,7 +37,7 @@ logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
 
 # }}}
 # {{{ Constants
-INSTRUMENT_FILE_PATH='./instrument'
+INSTRUMENT_FILE_PATH = './instrument'
 if os.path.isfile(INSTRUMENT_FILE_PATH):
     INSTRUMENT_EXECUTION = True
 else:
@@ -127,31 +131,10 @@ else:
     task_state_dictionary = collections.defaultdict(return_none)
 
 # }}}
-def inspect_function_execution(func):
-    @wraps(func)
-    def _(*args, **kwargs):
-        if INSTRUMENT_EXECUTION:
-            print(f"Was called from: {inspect.stack()[1].function}.")
-            print(f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}.")
-            # print(f"From wrapper function: {func}")
-            start_time = time.time()
-            return_value = func(*args, **kwargs)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            print(f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds.")
-            return return_value
-        else:
-            return func(*args, **kwargs)
-    return _
-
-@inspect_function_execution
-def return_none():
-    return None
-
 # {{{ no preprocessing fn
+# @MyTracePath.inspect_function_execution
 
 
-@inspect_function_execution
 def no_preprocessing_fn(inputs):
     """Preprocess input columns into transformed columns."""
     # Since we are modifying some features and leaving others unchanged, we
@@ -173,7 +156,7 @@ def fn_seconds_since_1970(ts_in):
 # {{{ small preprocessing fn
 
 
-@inspect_function_execution
+# @MyTracePath.inspect_function_execution
 def preprocessing_fn(inputs):
     """Preprocess input columns into transformed columns."""
     # Since we are modifying some features and leaving others unchanged, we
@@ -181,6 +164,8 @@ def preprocessing_fn(inputs):
     transformed = inputs.copy()
     transformed['passenger_count'] = tft.scale_to_0_1(
         inputs['passenger_count'])
+    # cannot use the below in tft as managing those learned values needs to be
+    # managed carefully
     # normalizer = tf.keras.layers.Normalization(axis=None,
     #                                            name="passenger_count_normalizer")
     # normalizer.adapt(inputs['passenger_count'])
@@ -275,11 +260,15 @@ def preprocessing_fn(inputs):
         (hashed_trip_intermediary, hour_of_day_of_week_intermediary))
     return transformed
 
+
 # }}}
 # {{{ pipeline function
-@inspect_function_execution
+pipeline_options = PipelineOptions(runner='DirectRunner', direct_num_workers=1)
+
+
+@MyTracePath.inspect_function_execution
 def pipeline_function(prefix_string, preprocessing_fn):
-    with beam.Pipeline() as pipeline:
+    with beam.Pipeline(options=pipeline_options) as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
             # Create a TFXIO to read the census data with the schema. To do this we
             # need to list all columns in order since the schema doesn't specify the
@@ -344,7 +333,7 @@ def pipeline_function(prefix_string, preprocessing_fn):
 # {{{ Get tft_transform_output
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def get_tft_transform_output(working_directory, prefix_string):
     transform_fn_output_directory = os.path.join(
         working_directory, prefix_string, 'transform_output')
@@ -355,7 +344,7 @@ def get_tft_transform_output(working_directory, prefix_string):
 # {{{ Get single raw example
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def get_single_example(working_directory, prefix_string):
 
     list_of_original_files = glob.glob(os.path.join(working_directory,
@@ -373,7 +362,7 @@ def get_single_example(working_directory, prefix_string):
 # {{{ inspect_example function
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def inspect_example(dictionary_of_tensors):
     list_of_keys = dictionary_of_tensors.keys()
     list_of_tensors = dictionary_of_tensors.values()
@@ -387,10 +376,10 @@ def inspect_example(dictionary_of_tensors):
     return None
 # }}}
 # {{{ task functions
-
-
 # Pre-requisite: raw data is there
-@inspect_function_execution
+
+
+@MyTracePath.inspect_function_execution
 def write_raw_tfrecords():
     if task_state_dictionary["write_raw_tfrecords"] is None:
         original_prefix_string = 'raw_tfrecords'
@@ -400,7 +389,7 @@ def write_raw_tfrecords():
 
 
 # Pre-requisite: raw data is there
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def transform_tfrecords():
     prefix_string = PREFIX_STRING
     pipeline_function(prefix_string=prefix_string,
@@ -409,7 +398,7 @@ def transform_tfrecords():
 
 
 # Pre-requisite: None
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def clean_directory():
     if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
         shutil.rmtree(WORKING_DIRECTORY)
@@ -420,7 +409,7 @@ def clean_directory():
 
 
 # Pre-requisite: Data has already been pre-processed
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def train_non_embedding_model():
     task_prerequisites = task_dag['train_non_embedding_model']
     if not check_prerequisites(task_prerequisites):
@@ -448,7 +437,7 @@ def train_non_embedding_model():
 
 
 # Pre-requisite: Data has already been pre-processed
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def train_embedding_model():
     task_prerequisites = task_dag['train_embedding_model']
     if not check_prerequisites(task_prerequisites):
@@ -474,7 +463,7 @@ def train_embedding_model():
     task_state_dictionary['train_embedding_model'] = True
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def check_prerequisites(task_prerequisites):
     prerequisites_met = True
     for task in task_prerequisites:
@@ -484,7 +473,7 @@ def check_prerequisites(task_prerequisites):
 # Pre-requisite: raw tfrecords have been written
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def view_original_sample_data():
     task_prerequisites = task_dag['view_original_sample_data']
     if not check_prerequisites(task_prerequisites):
@@ -502,7 +491,7 @@ def view_original_sample_data():
 
 
 # Pre-requisite: transformed tfrecords have been written
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def view_transformed_sample_data():
     task_prerequisites = task_dag['view_transformed_sample_data']
     if not check_prerequisites(task_prerequisites):
@@ -536,7 +525,7 @@ def view_transformed_sample_data():
 
 
 # Raw tfrecords have been written, data has been preprocessed
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def train_and_predict_embedding_model():
     task_prerequisites = task_dag['train_and_predict_embedding_model']
     if not check_prerequisites(task_prerequisites):
@@ -571,7 +560,7 @@ def train_and_predict_embedding_model():
     task_state_dictionary['train_and_predict_embedding_model'] = True
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def closeout_task(task_state_dictionary):
     if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
         with open(task_state_filepath, 'wb') as task_state_file:
@@ -606,7 +595,7 @@ task_dag['train_and_predict_embedding_model'].append('transform_tfrecords')
 # {{{ Perform task
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def perform_task(task_name):
     if task_name in valid_tasks:
         task_dictionary[task_name]()
@@ -615,7 +604,7 @@ def perform_task(task_name):
 # {{{ build raw inputs build_raw_inputs(RAW_DATA_FEATURE_SPEC):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
     raw_inputs_for_training = {}
     for key, spec in RAW_DATA_FEATURE_SPEC.items():
@@ -634,7 +623,7 @@ def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
 # {{{ get_tft_transform_output(WORKING_DIRECTORY, prefix_string):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def get_tft_transform_output(working_directory, prefix_string):
     transform_fn_output = os.path.join(
         working_directory,
@@ -647,7 +636,7 @@ def get_tft_transform_output(working_directory, prefix_string):
 # {{{ Build transformed inputs build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
     transformed_inputs = {}
     for key, spec in TRANSFORMED_DATA_FEATURE_SPEC.items():
@@ -666,7 +655,7 @@ def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
 # {{{ Build dnn and keras inputs build_dnn_and_keras_inputs(transformed_inputs):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_dnn_and_keras_inputs(transformed_inputs):
     dnn_input_names = [
         'hashed_trip_and_time',
@@ -703,7 +692,7 @@ def build_dnn_and_keras_inputs(transformed_inputs):
 # {{{ Build non embedding model build_non_embedding_model():
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_non_embedding_model(dnn_inputs, transformed_inputs):
     dnn_inputs, _ = build_dnn_and_keras_inputs(transformed_inputs)
     stacked_inputs = tf.concat(tf.nest.flatten(dnn_inputs), axis=1)
@@ -717,7 +706,7 @@ def build_non_embedding_model(dnn_inputs, transformed_inputs):
 # {{{ map features and labels function map_features_and_labels(example):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def map_features_and_labels(example):
     label = example.pop(LABEL_COLUMN)
     return example, label
@@ -726,7 +715,7 @@ def map_features_and_labels(example):
 # get_transformed_dataset(WORKING_DIRECTORY, prefix_string, batch_size):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def get_transformed_dataset(working_directory, prefix_string, batch_size):
     list_of_transformed_files = glob.glob(os.path.join(working_directory,
                                                        prefix_string,
@@ -749,7 +738,7 @@ def get_transformed_dataset(working_directory, prefix_string, batch_size):
 # {{{ Build keras preprocessing layers build_keras_preprocessing_layers(keras_preprocessing_inputs):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_keras_preprocessing_layers(keras_preprocessing_inputs):
     bucketed_pickup_longitude_intermediary = keras_preprocessing_inputs[
         'bucketed_pickup_longitude']
@@ -777,7 +766,7 @@ def build_keras_preprocessing_layers(keras_preprocessing_inputs):
 # {{{ Build raw to preprocessing model build_raw_to_preprocessing_model(raw_inputs, tft_layer):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_raw_to_preprocessing_model(raw_inputs, tft_transform_output):
     tft_layer = tft_transform_output.transform_features_layer()
     return tf.keras.Model(raw_inputs, tft_layer(raw_inputs))
@@ -785,7 +774,7 @@ def build_raw_to_preprocessing_model(raw_inputs, tft_transform_output):
 # {{{ Build preprocessing model build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
     stacked_inputs = tf.concat(tf.nest.flatten(dnn_inputs), axis=1)
     return tf.keras.Model(
@@ -796,7 +785,7 @@ def build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
 # {{{ Build model with embeddings build_embedding_model(transformed_inputs):
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_embedding_model(transformed_inputs):
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
         transformed_inputs)
@@ -857,7 +846,7 @@ def build_embedding_model(transformed_inputs):
 # {{{ build end to end model
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def build_end_to_end_model(
         raw_inputs,
         transformed_inputs,
@@ -877,7 +866,7 @@ def build_end_to_end_model(
 # {{{ Get single batched example
 
 
-@inspect_function_execution
+@MyTracePath.inspect_function_execution
 def get_single_batched_example(working_directory, prefix_string):
     list_of_tfrecord_files = glob.glob(
         os.path.join(
@@ -900,11 +889,24 @@ def get_single_batched_example(working_directory, prefix_string):
 # }}}
 # }}}
 # {{{ Parser function
-@inspect_function_execution
+# @MyTracePath.inspect_function_execution
 def get_args():
+    usage_string = '''\
+
+A task based approach to using tensorflow transform.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --task TASKS          Pick tasks from {'train_embedding_model',
+                        'write_raw_tfrecords', 'transform_tfrecords',
+                        'train_and_predict_embedding_model',
+                        'train_non_embedding_model', 'view_original_sample_data',
+                        'clean_directory', 'view_transformed_sample_data'}
+  --visualize_tasks VISUALIZATION_FILENAME
+                        Specify the filename to visualize the execution of tft
+                        tasks(e.g. mlops_pipeline.svg)'''
     parser = argparse.ArgumentParser(
-        description="Select one or more tasks from the set below:")
-    parser = argparse.ArgumentParser(
+        prog="tft_tasks.py", usage=usage_string,
         description="A task based approach to using tensorflow transform.")
     parser.add_argument(
         '--task',
@@ -912,9 +914,25 @@ def get_args():
         action='append',
         required=True,
         help=f'Pick tasks from {valid_tasks}')
+    parser.add_argument(
+        '--visualize_tasks',
+        dest='visualization_filename',
+        action='append',
+        required=False,
+        help=f'Specify the filename to visualize the execution of tft tasks'
+        '(e.g. mlops_pipeline.svg)')
+    # ipdb()
+    # try:
+    #     options = parser.parse_args()
+    # except:
+    #     parser.print_help()
+    #     sys.exit(0)
+    # return options
     return parser.parse_args()
 # }}}
 # {{{ Main function
+
+
 def main(args):
     if os.path.isfile(task_state_filepath):
         with open(task_state_filepath, 'rb') as task_state_file:
@@ -935,4 +953,9 @@ def main(args):
 if __name__ == '__main__':
     args = get_args()
     main(args)
+    if args.visualization_filename:
+        MyTracePath.add_edges()
+        print(
+            f"Visualizing program execution to {args.visualization_filename[0]}.")
+        MyTracePath.draw_graph(filename=args.visualization_filename[0])
 # }}}

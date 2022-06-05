@@ -1,22 +1,27 @@
+# {{{ Imports
 import inspect
 from functools import wraps
-import pydot
 import time
-from collections import namedtuple
-import ipdb as set_trace
-from IPython import embed as ipython
-from queue import LifoQueue
+import pygraphviz as pgv
+import collections
+# }}}
+# {{{ TracePath class
+
 
 class TracePath:
+    # {{{ __init__ function
     def __init__(self, instrument=True):
         self.instrument = instrument
-        self.counter = 0
-        self.counter_dictionary = {}
-        self.counter_dictionary[0] = []
-        self.timing_dictionary = {}
-        self.timing_dictionary[0] = []
-        self.graph = pydot.Dot("my_graph", graph_type="digraph", bgcolor="blue")
-        self.execution_counter = 0
+        # self.counter = 0
+        # self.counter_dictionary = {}
+        self.function_mapping_list = []
+        self.function_measuring_list = []
+        self.graph = pgv.AGraph(directed=True, strict=True)
+        # self.graph.attr["color"] = "white"
+        # self.execution_counter = 0
+        # }}}
+        # {{{ Inspect function
+
     def inspect_function_execution(self, func):
         @wraps(func)
         def _(*args, **kwargs):
@@ -24,203 +29,97 @@ class TracePath:
                 caller = inspect.stack()[1].function
                 called = func.__name__
                 print(f"Caller: {caller}, Called: {called}")
-                function_mapping = namedtuple("function_mapping",
-                "caller called")
-                function_measurement = namedtuple("function_measurement",
-                "caller called elapsed_time")
+                function_mapping = collections.namedtuple(
+                    "function_mapping", "caller called")
+                function_measurement = collections.namedtuple(
+                    "function_measurement", "caller called elapsed_time"
+                    )
                 local_mapping_tuple = function_mapping(caller, called)
-                timing_counter = self.counter
-                if caller == 'main':
-                    self.counter = self.counter + 1
-                    timing_counter = self.counter
-                    self.counter_dictionary[self.counter] = []
-                    self.timing_dictionary[self.counter] = []
-
-                    # execution_tree[caller] = called
-                    # execution_tree[caller] = dictionary_writer(caller, called)
-                    print("Main case")
-                else:
-                # if not caller.find('line'):
-                    if 'cell line' in caller:
-                        print("Found cell line")
-                    else:
-                        print("Did not find it")
-                        print(f"Non-main case {caller}")
-
-                self.counter_dictionary[self.counter].append(local_mapping_tuple)
-                        # throwaway_dict = collections.OrderedDict()
-                        # throwaway_dict[caller] = called
-                        # # execution_tree[caller] = throwaway_dict
-                        # execution_tree[caller] = dictionary_writer(throwaway_dict, called)
-                        # Create new dictionary
-                # print(f"Type of caller is: {type(caller)}")
-                # print(f"Was called from: {inspect.stack()[1].function}.")
-                print(f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}.")
+                # timing_counter = self.counter
+                self.function_mapping_list.append(local_mapping_tuple)
+                print(
+                    f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}."
+                    )
                 print(f"Executing function named: {func.__name__}")
                 # print(f"From wrapper function: {func}")
                 start_time = time.time()
                 return_value = func(*args, **kwargs)
                 end_time = time.time()
                 elapsed_time = end_time - start_time
-                local_measurement_tuple = function_measurement(caller, called, elapsed_time)
-                self.timing_dictionary[timing_counter].append(local_measurement_tuple)
+                local_measurement_tuple = function_measurement(
+                    caller, called, elapsed_time
+                    )
+                self.function_measuring_list.append(local_measurement_tuple)
                 # self.counter_dictionary[self.counter].append(local_mapping_tuple)
-                print(f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds.")
-                
+                print(
+                    f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds."
+                    )
+
                 return return_value
             else:
-                return func(*args, **kwargs) #Case where no instrumentation
+                return func(*args, **kwargs)  # Case where no instrumentation
+
         return _
+        # }}}
+    # {{{ get_node
 
-    def new_tuple_writer(self, tuple_list):
-        return_dictionary = {}
-        current_dictionary = {}
-        for count in range(len(tuple_list) -1, -1, -1):
-            # print(tuple_list[count])
-            if current_dictionary == {}:
-                # current_dictionary = {'name': tuple_list[count][1], 'children': []}
-                # current_dictionary = {'name': tuple_list[count][0], 'children':[current_dictionary]}
-                current_dictionary = {'name': tuple_list[count].called, 'children': []}
-                current_dictionary = {'name': tuple_list[count].caller, 'children':[current_dictionary]}
-                
+    def get_node(self, node_label):
+        try:
+            node = self.graph.get_node(self.graph, node_label)
+        except BaseException:
+            KeyError
+            self.graph.add_node(node_label)
+            node = self.graph.get_node(node_label)
+        return node
+
+    # }}}
+    # {{{ add_edges(tuple_list, self.graph):
+
+    def add_edges(self):
+        stack = collections.deque()
+        sequence = 0
+        bad_nodes = []
+        for function_map in self.function_mapping_list:
+            caller_label = function_map.caller
+            called_label = function_map.called
+            source_node = self.get_node(caller_label)
+            destination_node = self.get_node(called_label)
+            if len(stack) == 0:
+                self.graph.add_edge(
+                    source_node, destination_node, label=sequence)
+                stack.append(caller_label)
             else:
-                # current_dictionary = {'name': tuple_list[count][0], 'children':
-                # [current_dictionary]}
-                current_dictionary = {'name': tuple_list[count].caller, 'children':
-                [current_dictionary]}
-            # return_dictionary = {'name': tuple_list[count][0],  'children': [current_dictionary]}
-        return current_dictionary
+                if caller_label in stack:
+                    # Pop the stack off till the last node that called this one
+                    while stack[-1] != caller_label:
+                        stack.pop()
+                elif caller_label not in stack:
+                    print(
+                        f"caller {caller_label} and called {called_label} have issues. {caller_label} called when it was not on the stack."
+                        )
+                    bad_nodes.append(caller_label)
+                    bad_node = self.get_node(caller_label)
+                    bad_node.attr["color"] = "orange"
+                    continue
+                self.graph.add_edge(
+                    source_node, destination_node, label=sequence)
+            stack.append(called_label)
+            sequence += 1
+        for node in bad_nodes:
+            bad_node = self.get_node(node)
+            bad_node.attr["color"] = "orange"
 
-    def timing_tuple_writer(self, tuple_list):
-        return_dictionary = {}
-        current_dictionary = {}
-        for count in range(len(tuple_list)):
-            # print(tuple_list[count])
-            if current_dictionary == {}:
-                # current_dictionary = {'name': tuple_list[count][1], 'children': []}
-                # current_dictionary = {'name': tuple_list[count][0], 'children':[current_dictionary]}
-                current_dictionary = {'name': tuple_list[count].called, 'children': []}
-                current_dictionary = {'name': tuple_list[count].caller,
-                'elapsed_time': tuple_list[count].elapsed_time, 'children':[current_dictionary]}
-                
-            else:
-                # current_dictionary = {'name': tuple_list[count][0], 'children':
-                # [current_dictionary]}
-                current_dictionary = {'name': tuple_list[count].caller,
-                'elapsed_time': tuple_list[count].elapsed_time, 'children':
-                [current_dictionary]}
-            # return_dictionary = {'name': tuple_list[count][0],  'children': [current_dictionary]}
-        return current_dictionary
+    #        # }}}
+    # {{{ Draw graph
 
-    def dict_writer(self):
-        # set_trace.set_trace()
-        return_dictionary = {}
-        return_list = []
-        current_dictionary = {}
-        for count in self.counter_dictionary.keys():
-            # print(count)
-            # print(counter_dictionary[count])
-            # print(tuple_writer(counter_dictionary[count]))
-            current_dictionary = self.new_tuple_writer(self.counter_dictionary[count])
-            # set_trace.set_trace()
-            # print(current_dictionary['name'] = f"main{count}")
-            if current_dictionary['name'] == 'main':
-                # print("In here!")
-                current_dictionary['name'] = f"main{count}" 
-            print(current_dictionary)
-            return_list.append(current_dictionary)
-        return_dictionary = {'name': 'root', 'children': return_list}
-        return return_dictionary
-    
-    def timing_dict_writer(self):
-        # set_trace.set_trace()
-        return_dictionary = {}
-        return_list = []
-        current_dictionary = {}
-        for count in self.timing_dictionary.keys():
-            # print(count)
-            # print(counter_dictionary[count])
-            # print(tuple_writer(counter_dictionary[count]))
-            current_dictionary = self.timing_tuple_writer(self.timing_dictionary[count])
-            # set_trace.set_trace()
-            # print(current_dictionary['name'] = f"main{count}")
-            if current_dictionary['name'] == 'main':
-                # print("In here!")
-                current_dictionary['name'] = f"main{count}" 
-            print(current_dictionary)
-            return_list.append(current_dictionary)
-        return_dictionary = {'name': 'root', 'children': return_list}
-        return return_dictionary
-
-    def parser_nested_dictionary(self, dictionary, parent_node_label=None):
-        for key, value in dictionary.items():
-            if key == 'name':
-                current_node_label = value
-                current_node = pydot.Node(current_node_label,
-                label=current_node_label)
-                print(f"current node label is {current_node_label}")
-                if parent_node_label:
-                    print(f"parent node label is {parent_node_label}")
-                    parent_node = pydot.Node(parent_node_label,
-                    label=parent_node_label)
-                    my_edge = pydot.Edge(src=parent_node, dst=current_node,
-                    label=self.execution_counter)
-                    self.execution_counter += 1
-                    self.graph.add_edge(my_edge)
-                    print(f"Going to make node {parent_node} the parent of{current_node_label}")
-                else:
-                    self.graph.add_node(current_node)
-
-            elif key == 'children':
-                for child in value:
-                    print(f"Recursing with current_node_label as {current_node_label}")
-                    self.parser_nested_dictionary(child, parent_node_label=current_node_label)
-# MyTracePath = TracePath()
-# @MyTracePath.inspect_function_execution
-# def function_a(a, b, c=3):
-#     print(f"From function function_a.")
-#     kangaroo = "kangaroo"
-#     function_b()
-#     # get_stack()
-#     # print("From function a")
-#     # function_b()
-
-
-# @MyTracePath.inspect_function_execution
-# def function_b():
-#     print(f"From function function_b.")
-#     # print("Monkeys")
-#     pass
-
-# @MyTracePath.inspect_function_execution
-# def function_c():
-#     print(f"From function function_c.")
-#     function_d()
-
-# @MyTracePath.inspect_function_execution
-# def function_e():
-#     print(f"From function function_e.")
-#     function_b()
-
-# @MyTracePath.inspect_function_execution
-# def function_d():
-#     print(f"From function function_d.")
-#     function_a(3, 4, c=8)
-
-# @MyTracePath.inspect_function_execution
-# def main():
-#     kangaroo = "kangaroo"
-#     # get_stack()
-#     # function_a(1, 2, c=4)
-#     function_b()
-#     function_e()
-#     function_c()
-#     function_d()
-#     function_c()
-#     MyTracePath.parser_nested_dictionary(dictionary=MyTracePath.dict_writer())
-#     MyTracePath.graph.write_jpeg('./my_oop_graph.jpg')
-
-
-
-# if __name__ == '__main__':
-#     main()
+    def draw_graph(self, filename, *args, **kwargs):
+        self.graph.layout()
+        self.graph.layout(prog="dot")
+        self.graph.draw(filename)
+        # pgv.AGraph.close(filename)
+        # tempgraph = graph
+        # def self.graph_writer(tempgraph, filename):
+        #     tempgraph.draw(filename)
+        #     tempgraph.close(filename)
+        # graph_writer(tempgraph, filename)
+        # }}}
