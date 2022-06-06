@@ -7,3 +7,4 @@ keras==2.8.0
 matplotlib==3.5.1
 graphviz==0.19.1
 pygraphviz==1.9
+pyparsing==2.4.7
