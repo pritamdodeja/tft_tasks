@@ -10,15 +10,24 @@ import collections
 
 class TracePath:
     # {{{ __init__ function
-    def __init__(self, instrument=True):
+    def __init__(self, instrument=True, name=None):
+        self.name = name
         self.instrument = instrument
-        # self.counter = 0
-        # self.counter_dictionary = {}
         self.function_mapping_list = []
         self.function_measuring_list = []
-        self.graph = pgv.AGraph(directed=True, strict=True)
-        # self.graph.attr["color"] = "white"
-        # self.execution_counter = 0
+        self.graph = pgv.AGraph(directed=True, strict=False, rankdir="LR",
+        outputorder="labelsfirst")
+        # }}}
+    # {{{ __del__ function
+    def __del__(self, instrument=True, name=None):
+        # print(f"Destructor called on {self.name}")
+        del(self.name)
+        del(self.instrument)
+        del(self.function_mapping_list)
+        del(self.function_measuring_list)
+        del(self.graph)
+        del(self)
+        return True
         # }}}
         # {{{ Inspect function
 
@@ -28,20 +37,14 @@ class TracePath:
             if self.instrument:
                 caller = inspect.stack()[1].function
                 called = func.__name__
-                print(f"Caller: {caller}, Called: {called}")
                 function_mapping = collections.namedtuple(
-                    "function_mapping", "caller called")
+                    "function_mapping", "caller called args kwargs")
                 function_measurement = collections.namedtuple(
                     "function_measurement", "caller called elapsed_time"
                     )
-                local_mapping_tuple = function_mapping(caller, called)
-                # timing_counter = self.counter
+                local_mapping_tuple = function_mapping(caller, called, args,
+                kwargs)
                 self.function_mapping_list.append(local_mapping_tuple)
-                print(
-                    f"Executing function named: {func.__name__}, with arguments: {args}, and keyword arguments: {kwargs}."
-                    )
-                print(f"Executing function named: {func.__name__}")
-                # print(f"From wrapper function: {func}")
                 start_time = time.time()
                 return_value = func(*args, **kwargs)
                 end_time = time.time()
@@ -50,10 +53,6 @@ class TracePath:
                     caller, called, elapsed_time
                     )
                 self.function_measuring_list.append(local_measurement_tuple)
-                # self.counter_dictionary[self.counter].append(local_mapping_tuple)
-                print(
-                    f"From wrapper function: Execution of {func.__name__} took {elapsed_time} seconds."
-                    )
 
                 return return_value
             else:
@@ -82,13 +81,14 @@ class TracePath:
         for function_map in self.function_mapping_list:
             caller_label = function_map.caller
             called_label = function_map.called
+            arguments = str(function_map.args) + str(function_map.kwargs)
             source_node = self.get_node(caller_label)
             destination_node = self.get_node(called_label)
             if len(stack) == 0:
                 self.graph.add_edge(
                     source_node, destination_node, label=sequence)
                 stack.append(caller_label)
-            else:
+            elif len(stack) > 0:
                 if caller_label in stack:
                     # Pop the stack off till the last node that called this one
                     while stack[-1] != caller_label:
@@ -99,8 +99,7 @@ class TracePath:
                         )
                     bad_nodes.append(caller_label)
                     bad_node = self.get_node(caller_label)
-                    bad_node.attr["color"] = "orange"
-                    continue
+                    # continue
                 self.graph.add_edge(
                     source_node, destination_node, label=sequence)
             stack.append(called_label)
@@ -116,10 +115,4 @@ class TracePath:
         self.graph.layout()
         self.graph.layout(prog="dot")
         self.graph.draw(filename)
-        # pgv.AGraph.close(filename)
-        # tempgraph = graph
-        # def self.graph_writer(tempgraph, filename):
-        #     tempgraph.draw(filename)
-        #     tempgraph.close(filename)
-        # graph_writer(tempgraph, filename)
         # }}}

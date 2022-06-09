@@ -28,7 +28,7 @@ from functools import wraps
 import time
 import inspect
 from trace_path import TracePath
-MyTracePath = TracePath(instrument=True)
+MyTracePath = TracePath(instrument=True, name="MyTracePath")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 # set TF error log verbosity
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
@@ -270,12 +270,12 @@ pipeline_options = PipelineOptions(runner='DirectRunner', direct_num_workers=1)
 def pipeline_function(prefix_string, preprocessing_fn):
     with beam.Pipeline(options=pipeline_options) as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
-            # Create a TFXIO to read the census data with the schema. To do this we
+            # Create a TFXIO to read the data with the schema. To do this we
             # need to list all columns in order since the schema doesn't specify the
             # order of columns in the csv.
             # We first read CSV files and use BeamRecordCsvTFXIO whose .BeamSource()
-            # accepts a PCollection[bytes] because we need to patch the records first
-            # (see "FixCommasTrainData" below). Otherwise, tfxio.CsvTFXIO can be used
+            # accepts a PCollection[bytes] 
+            # tfxio.CsvTFXIO can be used
             # to both read the CSV files and parse them to TFT inputs:
             # csv_tfxio = tfxio.CsvTFXIO(...)
             # raw_data = (pipeline | 'ToRecordBatches' >> csv_tfxio.BeamSource())
@@ -294,8 +294,6 @@ def pipeline_function(prefix_string, preprocessing_fn):
                 pipeline
                 | 'ReadTrainData' >> beam.io.ReadFromText(
                     file_pattern=train_file_path, coder=beam.coders.BytesCoder(), skip_header_lines=1)
-                # | 'FixCommasTrainData' >> beam.Map(
-                #     lambda line: line.replace(b', ', b','))
                 | 'DecodeTrainData' >> csv_tfxio.BeamSource()
 
                 )
@@ -432,7 +430,7 @@ def train_non_embedding_model():
         dnn_inputs, transformed_inputs)
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
-    non_embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    non_embedding_model.fit(transformed_ds, epochs=1, steps_per_epoch=64)
     task_state_dictionary['train_non_embedding_model'] = True
 
 
@@ -459,7 +457,7 @@ def train_embedding_model():
     embedding_model = build_embedding_model(transformed_inputs)
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
-    embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    embedding_model.fit(transformed_ds, epochs=1, steps_per_epoch=64)
     task_state_dictionary['train_embedding_model'] = True
 
 
@@ -549,7 +547,7 @@ def train_and_predict_embedding_model():
     embedding_model = build_embedding_model(transformed_inputs)
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
-    embedding_model.fit(transformed_ds, epochs=2, steps_per_epoch=64)
+    embedding_model.fit(transformed_ds, epochs=1, steps_per_epoch=64)
     end_to_end_model = build_end_to_end_model(
         raw_inputs,
         transformed_inputs,
@@ -612,8 +610,6 @@ def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
             raw_inputs_for_training[key] = tf.keras.layers.Input(
                 shape=(1,), name=key, dtype=spec.dtype, sparse=True)
         elif isinstance(spec, tf.io.FixedLenFeature):
-            # TODO(b/208879020): Move into schema such that spec.shape is [1] and not
-            # [] for scalars.
             raw_inputs_for_training[key] = tf.keras.layers.Input(
                 shape=spec.shape, name=key, dtype=spec.dtype)
         else:
@@ -644,8 +640,6 @@ def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
             transformed_inputs[key] = tf.keras.layers.Input(
                 shape=(1,), name=key, dtype=spec.dtype, sparse=True)
         elif isinstance(spec, tf.io.FixedLenFeature):
-            # TODO(b/208879020): Move into schema such that spec.shape is [1] and not
-            # [] for scalars.
             transformed_inputs[key] = tf.keras.layers.Input(
                 shape=spec.shape, name=key, dtype=spec.dtype)
         else:
@@ -921,13 +915,6 @@ optional arguments:
         required=False,
         help=f'Specify the filename to visualize the execution of tft tasks'
         '(e.g. mlops_pipeline.svg)')
-    # ipdb()
-    # try:
-    #     options = parser.parse_args()
-    # except:
-    #     parser.print_help()
-    #     sys.exit(0)
-    # return options
     return parser.parse_args()
 # }}}
 # {{{ Main function
