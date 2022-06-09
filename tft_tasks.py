@@ -941,7 +941,7 @@ if __name__ == '__main__':
     args = get_args()
     main(args)
     if args.visualization_filename:
-        MyTracePath.add_edges()
+        MyTracePath.construct_graph()
         print(
             f"Visualizing program execution to {args.visualization_filename[0]}.")
         MyTracePath.draw_graph(filename=args.visualization_filename[0])

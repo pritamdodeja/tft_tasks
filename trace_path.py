@@ -64,17 +64,21 @@ class TracePath:
 
     def get_node(self, node_label):
         try:
-            node = self.graph.get_node(self.graph, node_label)
-        except BaseException:
-            KeyError
-            self.graph.add_node(node_label)
             node = self.graph.get_node(node_label)
+        except KeyError as e:
+            raise(e)
         return node
 
-    # }}}
-    # {{{ add_edges(tuple_list, self.graph):
+    def add_node(self, node_label):
+        try:
+            node = self.graph.get_node(node_label)
+        except KeyError:
+            self.graph.add_node(node_label)
 
-    def add_edges(self):
+    # }}}
+    # {{{ construct_graph(tuple_list, self.graph):
+
+    def construct_graph(self):
         stack = collections.deque()
         sequence = 0
         bad_nodes = []
@@ -82,8 +86,19 @@ class TracePath:
             caller_label = function_map.caller
             called_label = function_map.called
             arguments = str(function_map.args) + str(function_map.kwargs)
-            source_node = self.get_node(caller_label)
-            destination_node = self.get_node(called_label)
+            try:
+                source_node = self.get_node(caller_label)
+            except KeyError:
+                self.add_node(caller_label)
+                source_node = self.get_node(caller_label)
+
+
+            try:
+                destination_node = self.get_node(called_label)
+            except KeyError:
+                self.add_node(called_label)
+                destination_node = self.get_node(called_label)
+
             if len(stack) == 0:
                 self.graph.add_edge(
                     source_node, destination_node, label=sequence)
