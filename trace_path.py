@@ -16,9 +16,10 @@ class TracePath:
         self.function_mapping_list = []
         self.function_measuring_list = []
         self.graph = pgv.AGraph(directed=True, strict=False, rankdir="LR",
-        outputorder="labelsfirst")
+                                outputorder="labelsfirst")
         # }}}
     # {{{ __del__ function
+
     def __del__(self, instrument=True, name=None):
         # print(f"Destructor called on {self.name}")
         del(self.name)
@@ -43,7 +44,7 @@ class TracePath:
                     "function_measurement", "caller called elapsed_time"
                     )
                 local_mapping_tuple = function_mapping(caller, called, args,
-                kwargs)
+                                                       kwargs)
                 self.function_mapping_list.append(local_mapping_tuple)
                 start_time = time.time()
                 return_value = func(*args, **kwargs)
@@ -71,7 +72,7 @@ class TracePath:
 
     def add_node(self, node_label):
         try:
-            node = self.graph.get_node(node_label)
+            self.graph.get_node(node_label)
         except KeyError:
             self.graph.add_node(node_label)
 
@@ -85,13 +86,12 @@ class TracePath:
         for function_map in self.function_mapping_list:
             caller_label = function_map.caller
             called_label = function_map.called
-            arguments = str(function_map.args) + str(function_map.kwargs)
+            # arguments = str(function_map.args) + str(function_map.kwargs)
             try:
                 source_node = self.get_node(caller_label)
             except KeyError:
                 self.add_node(caller_label)
                 source_node = self.get_node(caller_label)
-
 
             try:
                 destination_node = self.get_node(called_label)
@@ -110,7 +110,9 @@ class TracePath:
                         stack.pop()
                 elif caller_label not in stack:
                     print(
-                        f"caller {caller_label} and called {called_label} have issues. {caller_label} called when it was not on the stack."
+                        f"caller {caller_label} and called {called_label} have"
+                        f"issues. {caller_label} called when it was not on the"
+                        f"stack."
                         )
                     bad_nodes.append(caller_label)
                     bad_node = self.get_node(caller_label)

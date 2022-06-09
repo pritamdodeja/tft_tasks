@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 # {{{ Imports
-# Goal: Implement taxicab fare prediction with a tft pipeline with safety checks
-# and a simpler flow.
+# Goal: Implement taxicab fare prediction with a tft pipeline with safety
+# checks and a simpler flow.
 from apache_beam.options.pipeline_options import PipelineOptions
-import sys
 import argparse
 import shutil
 import glob
@@ -14,19 +13,14 @@ import tensorflow_transform.beam as tft_beam
 import tensorflow_transform as tft
 import apache_beam as beam
 import tensorflow_addons as tfa
-from tensorflow.keras import models
 from tensorflow.keras import layers
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from tensorflow_transform.tf_metadata import schema_utils
 import tempfile
 import logging
 import os
 import pickle
 import collections
-from functools import wraps
-import time
-import inspect
 from trace_path import TracePath
 MyTracePath = TracePath(instrument=True, name="MyTracePath")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
@@ -161,38 +155,41 @@ def preprocessing_fn(inputs):
     # cannot use the below in tft as managing those learned values needs to be
     # managed carefully
     # normalizer = tf.keras.layers.Normalization(axis=None,
-    #                                            name="passenger_count_normalizer")
+    # name="passenger_count_normalizer")
     # normalizer.adapt(inputs['passenger_count'])
-    # transformed['other_passenger_count'] = normalizer(inputs['passenger_count'])
+    # transformed['other_passenger_count'] = normalizer(
+    #               inputs['passenger_count'])
     for lon_col in ['pickup_longitude', 'dropoff_longitude']:
-        #transformed[lon_col] = scale_longitude(inputs[lon_col])
+        # transformed[lon_col] = scale_longitude(inputs[lon_col])
         transformed[lon_col] = (inputs[lon_col] + 78) / 8.
     for lat_col in ['pickup_latitude', 'dropoff_latitude']:
         transformed[lat_col] = (inputs[lat_col] - 37) / 8.
     position_difference = tf.square(
-        inputs[f"dropoff_longitude"] -
-        inputs[f"pickup_longitude"])
+        inputs["dropoff_longitude"] -
+        inputs["pickup_longitude"])
     position_difference += tf.square(
-        inputs[f"dropoff_latitude"] -
-        inputs[f"pickup_latitude"])
+        inputs["dropoff_latitude"] -
+        inputs["pickup_latitude"])
     transformed['euclidean'] = tf.sqrt(position_difference)
     lat_lon_buckets = [bin_edge / NBUCKETS for bin_edge in range(0, NBUCKETS)]
 
     transformed['bucketed_pickup_longitude'] = tft.apply_buckets(
-        transformed[f"pickup_longitude"],
+        transformed["pickup_longitude"],
         bucket_boundaries=tf.constant([lat_lon_buckets]))
     transformed["bucketed_pickup_latitude"] = tft.apply_buckets(
         transformed['pickup_latitude'],
         bucket_boundaries=tf.constant([lat_lon_buckets]))
 
     transformed['bucketed_dropoff_longitude'] = tft.apply_buckets(
-        transformed[f"dropoff_longitude"],
+        transformed["dropoff_longitude"],
         bucket_boundaries=tf.constant([lat_lon_buckets]))
     transformed['bucketed_dropoff_latitude'] = tft.apply_buckets(
-        transformed[f"dropoff_latitude"],
+        transformed["dropoff_latitude"],
         bucket_boundaries=tf.constant([lat_lon_buckets]))
 
-    # transformed["pickup_cross"]=tf.sparse.cross(inputs=[transformed['pickup_latitude_apply_buckets'],transformed['pickup_longitude_apply_buckets']])
+    # transformed["pickup_cross"]=tf.sparse.cross(
+    # inputs=[transformed['pickup_latitude_apply_buckets'],
+    # transformed['pickup_longitude_apply_buckets']])
     hash_pickup_crossing_layer = tf.keras.layers.experimental.preprocessing.HashedCrossing(
         output_mode='one_hot', num_bins=NBUCKETS**2, name='hash_pickup_crossing_layer')
     transformed['pickup_location'] = hash_pickup_crossing_layer(
@@ -265,32 +262,31 @@ def pipeline_function(prefix_string, preprocessing_fn):
     with beam.Pipeline(options=pipeline_options) as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
             # Create a TFXIO to read the data with the schema. To do this we
-            # need to list all columns in order since the schema doesn't specify the
-            # order of columns in the csv.
-            # We first read CSV files and use BeamRecordCsvTFXIO whose .BeamSource()
-            # accepts a PCollection[bytes] 
+            # need to list all columns in order since the schema doesn't specify
+            # the order of columns in the csv.
+            # We first read CSV files and use BeamRecordCsvTFXIO whose
+            # .BeamSource() accepts a PCollection[bytes]
             # tfxio.CsvTFXIO can be used
             # to both read the CSV files and parse them to TFT inputs:
             # csv_tfxio = tfxio.CsvTFXIO(...)
-            # raw_data = (pipeline | 'ToRecordBatches' >> csv_tfxio.BeamSource())
+            # raw_data = (pipeline |
+            # 'ToRecordBatches' >> csv_tfxio.BeamSource())
             csv_tfxio = tfxio.BeamRecordCsvTFXIO(
                 physical_format='text',
                 column_names=CSV_COLUMNS,
                 schema=_SCHEMA)
 
             # Read in raw data and convert using CSV TFXIO.  Note that we apply
-            # some Beam transformations here, which will not be encoded in the TF
-            # graph since we don't do the from within tf.Transform's methods
-            # (AnalyzeDataset, TransformDataset etc.).  These transformations are just
-            # to get data into a format that the CSV TFXIO can read, in particular
-            # removing spaces after commas.
+            # some Beam transformations here, which will not be encoded in the
+            # TF graph since we don't do the from within tf.Transform's methods
+            # (AnalyzeDataset, TransformDataset etc.).  These transformations
+            #  are just to get data into a format that the CSV TFXIO can read,
+            #  in particular removing spaces after commas.
             raw_data = (
-                pipeline
-                | 'ReadTrainData' >> beam.io.ReadFromText(
-                    file_pattern=train_file_path, coder=beam.coders.BytesCoder(), skip_header_lines=1)
-                | 'DecodeTrainData' >> csv_tfxio.BeamSource()
-
-                )
+                pipeline | 'ReadTrainData' >> beam.io.ReadFromText(
+                    file_pattern=train_file_path,
+                    coder=beam.coders.BytesCoder(),
+                    skip_header_lines=1) | 'DecodeTrainData' >> csv_tfxio.BeamSource())
             raw_dataset = (raw_data, csv_tfxio.TensorAdapterConfig())
 
             transformed_dataset, transform_fn = (
@@ -364,7 +360,8 @@ def inspect_example(dictionary_of_tensors):
                                                        list_of_shapes,
                                                        list_of_dtypes):
         print(
-            f"Tensor {tensor_name} has dtype {tensor_dtype} and shape {tensor_shape}")
+            f"Tensor {tensor_name} has dtype {tensor_dtype} and"
+            f"shape {tensor_shape}")
     return None
 # }}}
 # {{{ task functions
@@ -375,8 +372,8 @@ def inspect_example(dictionary_of_tensors):
 def write_raw_tfrecords():
     if task_state_dictionary["write_raw_tfrecords"] is None:
         original_prefix_string = 'raw_tfrecords'
-        return_value = pipeline_function(prefix_string=original_prefix_string,
-                                         preprocessing_fn=no_preprocessing_fn)
+        pipeline_function(prefix_string=original_prefix_string,
+                          preprocessing_fn=no_preprocessing_fn)
         task_state_dictionary["write_raw_tfrecords"] = True
 
 
@@ -410,7 +407,7 @@ def train_non_embedding_model():
             if not task_state_dictionary[task]:
                 perform_task(task)
     assert(check_prerequisites(task_prerequisites))
-    raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
+    build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     tft_transform_output = get_tft_transform_output(
         WORKING_DIRECTORY, prefix_string)
@@ -438,7 +435,7 @@ def train_embedding_model():
             if not task_state_dictionary[task]:
                 perform_task(task)
     assert(check_prerequisites(task_prerequisites))
-    raw_inputs = build_raw_inputs(RAW_DATA_FEATURE_SPEC)
+    build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     tft_transform_output = get_tft_transform_output(
         WORKING_DIRECTORY, prefix_string)
@@ -504,7 +501,7 @@ def view_transformed_sample_data():
         TRANSFORMED_DATA_FEATURE_SPEC)
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
         transformed_inputs)
-    hashed_trip = build_keras_preprocessing_layers(keras_preprocessing_inputs)
+    build_keras_preprocessing_layers(keras_preprocessing_inputs)
     raw_to_preprocessing_model = build_raw_to_preprocessing_model(
         raw_inputs, tft_transform_output)
     transformed_batch_example = raw_to_preprocessing_model(
@@ -563,6 +560,8 @@ def closeout_task(task_state_dictionary):
 
     # }}}
 # {{{ task dictionary
+
+
 task_dictionary = {}
 task_dictionary['write_raw_tfrecords'] = write_raw_tfrecords
 task_dictionary['transform_tfrecords'] = transform_tfrecords
@@ -610,20 +609,8 @@ def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
             raise ValueError('Spec type is not supported: ', key, spec)
     return raw_inputs_for_training
 # }}}
-# {{{ get_tft_transform_output(WORKING_DIRECTORY, prefix_string):
-
-
-@MyTracePath.inspect_function_execution
-def get_tft_transform_output(working_directory, prefix_string):
-    transform_fn_output = os.path.join(
-        working_directory,
-        prefix_string,
-        'transform_output')
-    tft_transform_output = tft.TFTransformOutput(transform_fn_output)
-    return tft_transform_output
-
-# }}}
-# {{{ Build transformed inputs build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
+# {{{ Build transformed inputs
+# build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
 
 
 @MyTracePath.inspect_function_execution
@@ -640,7 +627,7 @@ def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
             raise ValueError('Spec type is not supported: ', key, spec)
     return transformed_inputs
 # }}}
-# {{{ Build dnn and keras inputs build_dnn_and_keras_inputs(transformed_inputs):
+# {{{ Build dnn and keras inputs build_dnn_and_keras_inputs(transformed_inputs)
 
 
 @MyTracePath.inspect_function_execution
@@ -718,12 +705,13 @@ def get_transformed_dataset(working_directory, prefix_string, batch_size):
     transformed_ds = transformed_ds.map(
         lambda X: tf.io.parse_single_example(
             serialized=X, features=feature_spec))
-    #transformed_ds = transformed_ds.map(lambda X: (X, X.pop("fare_amount")))
+    # transformed_ds = transformed_ds.map(lambda X: (X, X.pop("fare_amount")))
     transformed_ds = transformed_ds.map(map_features_and_labels)
     transformed_ds = transformed_ds.batch(batch_size=BATCH_SIZE).repeat()
     return transformed_ds
 # }}}
-# {{{ Build keras preprocessing layers build_keras_preprocessing_layers(keras_preprocessing_inputs):
+# {{{ Build keras preprocessing layers
+# build_keras_preprocessing_layers(keras_preprocessing_inputs):
 
 
 @MyTracePath.inspect_function_execution
@@ -751,7 +739,8 @@ def build_keras_preprocessing_layers(keras_preprocessing_inputs):
          hashed_dropoff_intermediary))
     return hashed_trip
 # }}}
-# {{{ Build raw to preprocessing model build_raw_to_preprocessing_model(raw_inputs, tft_layer):
+# {{{ Build raw to preprocessing model build_raw_to_preprocessing_model(
+#     raw_inputs, tft_layer):
 
 
 @MyTracePath.inspect_function_execution
@@ -759,7 +748,8 @@ def build_raw_to_preprocessing_model(raw_inputs, tft_transform_output):
     tft_layer = tft_transform_output.transform_features_layer()
     return tf.keras.Model(raw_inputs, tft_layer(raw_inputs))
 # }}}
-# {{{ Build preprocessing model build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
+# {{{ Build preprocessing model build_preprocessing_model(
+#     transformed_inputs, dnn_inputs, hashed_trip):
 
 
 @MyTracePath.inspect_function_execution
@@ -843,7 +833,6 @@ def build_end_to_end_model(
         new_model):
     tft_transform_output = get_tft_transform_output(
         working_directory, prefix_string)
-    feature_spec = tft_transform_output.transformed_feature_spec()
     tft_layer = tft_transform_output.transform_features_layer()
     x = tft_layer(raw_inputs)
     outputs = new_model(x)
@@ -865,7 +854,7 @@ def get_single_batched_example(working_directory, prefix_string):
     tft_transform_output = get_tft_transform_output(
         working_directory, prefix_string)
     feature_spec = tft_transform_output.transformed_feature_spec()
-    #tft_layer = tft_transform_output.transform_features_layer()
+    # tft_layer = tft_transform_output.transform_features_layer()
     example_string = dataset.take(1).get_single_element()
     single_example = tf.io.parse_single_example(
         serialized=example_string, features=feature_spec)
@@ -888,7 +877,8 @@ optional arguments:
   --task TASKS          Pick tasks from {'train_embedding_model',
                         'write_raw_tfrecords', 'transform_tfrecords',
                         'train_and_predict_embedding_model',
-                        'train_non_embedding_model', 'view_original_sample_data',
+                        'train_non_embedding_model',
+                        'view_original_sample_data',
                         'clean_directory', 'view_transformed_sample_data'}
   --visualize_tasks VISUALIZATION_FILENAME
                         Specify the filename to visualize the execution of tft
@@ -907,13 +897,13 @@ optional arguments:
         dest='visualization_filename',
         action='append',
         required=False,
-        help=f'Specify the filename to visualize the execution of tft tasks'
+        help='Specify the filename to visualize the execution of tft tasks'
         '(e.g. mlops_pipeline.svg)')
     return parser.parse_args()
 # }}}
+
+
 # {{{ Main function
-
-
 def main(args):
     if os.path.isfile(task_state_filepath):
         with open(task_state_filepath, 'rb') as task_state_file:
@@ -927,9 +917,9 @@ def main(args):
         else:
             perform_task(task)
     closeout_task(task_state_dictionary=task_state_dictionary)
-
-
     # }}}
+
+
 # {{{ Allow importing into other programs
 if __name__ == '__main__':
     args = get_args()
@@ -937,6 +927,7 @@ if __name__ == '__main__':
     if args.visualization_filename:
         MyTracePath.construct_graph()
         print(
-            f"Visualizing program execution to {args.visualization_filename[0]}.")
+            f"Visualizing program execution to "
+            f" {args.visualization_filename[0]}.")
         MyTracePath.draw_graph(filename=args.visualization_filename[0])
 # }}}
