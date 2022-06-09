@@ -37,12 +37,6 @@ logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
 
 # }}}
 # {{{ Constants
-INSTRUMENT_FILE_PATH = './instrument'
-if os.path.isfile(INSTRUMENT_FILE_PATH):
-    INSTRUMENT_EXECUTION = True
-else:
-    INSTRUMENT_EXECUTION = False
-
 CSV_COLUMNS = [
     "key",
     "fare_amount",
