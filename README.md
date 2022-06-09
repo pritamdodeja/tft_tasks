@@ -21,13 +21,13 @@ optional arguments:
 ```
 
 To execute the full lifecycle and visualize it, enter the below:
-If you have all of the prequisites in requirements.txt, you should see something like [this.](./mlops_pipeline.svg)  
+If you have all of the prequisites in requirements.txt, you should see something like [this.](example_images/mlops_pipeline.svg)  
 <p align="center">
-<img src="./mlops_pipeline.svg", title="pipeline graph", alt="A picture of a graph made up of functions.">
+<img src="example_images/mlops_pipeline_non_embedding_model.svg", title="pipeline graph", alt="A picture of a graph made up of functions.">
 </p>
 
 ```
-python tft_tasks.py --task train_and_predict_embedding_model --visualize_tasks mlops_pipeline.svg
+python tft_tasks.py --task train_non_embedding_model --visualize_tasks mlops_pipeline_non_embedding_model.svg
 ```
 
 # Goals of project
