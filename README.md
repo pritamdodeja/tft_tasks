@@ -56,6 +56,7 @@ These goals will evolve, as my learning evolves.  My personal (selfish) goal is 
 <p align="center">
 <img src="example_images/view_transformed_sample_data.svg", title="View transformed sample data graph", alt="A picture of a graph made up of functions.">
 </p>
+
 ## Train and predict embedding model task
 <p align="center">
 <img src="example_images/train_and_predict_embedding_model.png", title="full pipeline graph", alt="A picture of a graph made up of functions.">
