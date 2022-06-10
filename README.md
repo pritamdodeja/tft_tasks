@@ -21,7 +21,7 @@ optional arguments:
 ```
 
 To execute the full lifecycle and visualize it, enter the below:
-If you have all of the prequisites in requirements.txt, you should see something like [this.](example_images/mlops_pipeline.svg)  
+If you have all of the prequisites in requirements.txt, you should see something like this. 
 <p align="center">
 <img src="example_images/mlops_pipeline_non_embedding_model.svg", title="pipeline graph", alt="A picture of a graph made up of functions.">
 </p>
@@ -40,3 +40,23 @@ Machine learning frameworks such as scikit-learn are amazing, and they are so el
    
 These goals will evolve, as my learning evolves.  My personal (selfish) goal is to learn from the great engineers that contribute to open source every day, and to become a better thinker via programming.   
 
+# Sample Graphs
+
+## All tasks
+<p align="center">
+<img src="example_images/all_tasks.png", title="All tasks graph", alt="A picture of a graph made up of functions.">
+</p>
+
+## View original sample data task
+<p align="center">
+<img src="example_images/view_original_sample_data.svg", title="View original sample data graph", alt="A picture of a graph made up of functions.">
+</p>
+
+## View transformed sample data task
+<p align="center">
+<img src="example_images/view_transformed_sample_data.svg", title="View transformed sample data graph", alt="A picture of a graph made up of functions.">
+</p>
+## Train and predict embedding model task
+<p align="center">
+<img src="example_images/train_and_predict_embedding_model.png", title="full pipeline graph", alt="A picture of a graph made up of functions.">
+</p>

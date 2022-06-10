@@ -382,7 +382,7 @@ def inspect_example(dictionary_of_tensors):
 @MyTracePath.inspect_function_execution
 def write_raw_tfrecords():
     """
-    Task function: Create tfrecords from raw data using an identity 
+    Task function: Create tfrecords from raw data using an identity
     function.
     """
     if task_state_dictionary["write_raw_tfrecords"] is None:
@@ -396,8 +396,8 @@ def write_raw_tfrecords():
 @MyTracePath.inspect_function_execution
 def transform_tfrecords():
     """
-    Task function: Call the pipeline function with transform_tfrecords 
-    prefix and provide the preprocessing_fn, which creates transformed 
+    Task function: Call the pipeline function with transform_tfrecords
+    prefix and provide the preprocessing_fn, which creates transformed
     tfrecords.
     """
     prefix_string = PREFIX_STRING
@@ -461,7 +461,7 @@ def train_embedding_model():
     Task function: trains a model with embeddings by:
 
     1. Ensuring pre-requisites are completed
-    2. Creating an input layer for the model for both dense and preprocessing 
+    2. Creating an input layer for the model for both dense and preprocessing
        layers.
     3. Creates a transformed dataset and trains the model on it.
     """
@@ -503,7 +503,7 @@ def check_prerequisites(task_prerequisites):
 @MyTracePath.inspect_function_execution
 def view_original_sample_data():
     """
-    Task function: Gets raw input data and shows the data along 
+    Task function: Gets raw input data and shows the data along
     with datatypes and shapes.
     """
     task_prerequisites = task_dag['view_original_sample_data']
@@ -559,10 +559,10 @@ def train_and_predict_embedding_model():
     Task function: trains a model with embeddings by:
 
     1. Ensuring pre-requisites are completed
-    2. Creating an input layer for the model for both dense and preprocessing 
+    2. Creating an input layer for the model for both dense and preprocessing
        layers.
     3. Creates a transformed dataset and trains the model on it.
-    4. Attaches the raw inputs to make an end-to-end graph that includes 
+    4. Attaches the raw inputs to make an end-to-end graph that includes
        everything
     5. Takes a single raw input sample and does a prediction on it
     """
@@ -671,7 +671,7 @@ def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
 @MyTracePath.inspect_function_execution
 def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
     """
-    Given a feature spec, produce a dictionary of keras input 
+    Given a feature spec, produce a dictionary of keras input
     layers specifying shape, name, and datatype.
     """
     transformed_inputs = {}
@@ -733,7 +733,7 @@ def build_dnn_and_keras_inputs(transformed_inputs):
 @MyTracePath.inspect_function_execution
 def build_non_embedding_model(dnn_inputs, ):
     """
-    Create a model without embeddings, attach it to its inputs, 
+    Create a model without embeddings, attach it to its inputs,
     compile and return it.
     """
     # dnn_inputs, _ = build_dnn_and_keras_inputs(transformed_inputs)
@@ -762,7 +762,7 @@ def map_features_and_labels(example):
 def get_transformed_dataset(working_directory, prefix_string, batch_size):
     """
     Read the tfrecords on disk, get the feature spec stored to disk,
-    split the dataset into X, y, batch and make infinite and 
+    split the dataset into X, y, batch and make infinite and
     return for training.
     """
     list_of_transformed_files = glob.glob(os.path.join(working_directory,
@@ -848,8 +848,8 @@ def build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
 @MyTracePath.inspect_function_execution
 def build_embedding_model(transformed_inputs):
     """
-    Build, compile, and return a model that uses keras preprocessing 
-    layers in conjunction with the preprocessing already done in tensorflow 
+    Build, compile, and return a model that uses keras preprocessing
+    layers in conjunction with the preprocessing already done in tensorflow
     transform.
     """
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
