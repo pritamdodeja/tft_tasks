@@ -135,6 +135,7 @@ def no_preprocessing_fn(inputs):
 
 @tf.function
 def fn_seconds_since_1970(ts_in):
+    """Compute the seconds since 1970 given a datetime string"""
     seconds_since_1970 = tfa.text.parse_time(
         ts_in, "%Y-%m-%d %H:%M:%S %Z", output_unit="SECOND"
         )
@@ -146,7 +147,7 @@ def fn_seconds_since_1970(ts_in):
 
 # @MyTracePath.inspect_function_execution
 def preprocessing_fn(inputs):
-    """Preprocess input columns into transformed columns."""
+    """Preprocess input columns into transformed features."""
     # Since we are modifying some features and leaving others unchanged, we
     # start by setting `outputs` to a copy of `inputs.
     transformed = inputs.copy()
@@ -259,6 +260,12 @@ pipeline_options = PipelineOptions(runner='DirectRunner', direct_num_workers=1)
 
 @MyTracePath.inspect_function_execution
 def pipeline_function(prefix_string, preprocessing_fn):
+    """
+    Use a beam pipeline to transform data using preprocessing_fn. Write out
+    data as tfrecords, and also transform_fn_output so pipeline can be reused.
+    Reads from raw data and uses schema to interpret the data before using
+    preprocessing_fn to transform it.
+    """
     with beam.Pipeline(options=pipeline_options) as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
             # Create a TFXIO to read the data with the schema. To do this we
@@ -323,6 +330,7 @@ def pipeline_function(prefix_string, preprocessing_fn):
 
 @MyTracePath.inspect_function_execution
 def get_tft_transform_output(working_directory, prefix_string):
+    """Get tft transform output from a specified location"""
     transform_fn_output_directory = os.path.join(
         working_directory, prefix_string, 'transform_output')
     tft_transform_output = tft.TFTransformOutput(transform_fn_output_directory)
@@ -334,7 +342,7 @@ def get_tft_transform_output(working_directory, prefix_string):
 
 @MyTracePath.inspect_function_execution
 def get_single_example(working_directory, prefix_string):
-
+    """Produce a single example batch of raw data."""
     list_of_original_files = glob.glob(os.path.join(working_directory,
                                                     prefix_string,
                                        prefix_string) + '*')
@@ -352,6 +360,7 @@ def get_single_example(working_directory, prefix_string):
 
 @MyTracePath.inspect_function_execution
 def inspect_example(dictionary_of_tensors):
+    """Produce a description of dictionary of tensors"""
     list_of_keys = dictionary_of_tensors.keys()
     list_of_tensors = dictionary_of_tensors.values()
     list_of_shapes = [tensor.shape for tensor in list_of_tensors]
@@ -370,6 +379,10 @@ def inspect_example(dictionary_of_tensors):
 
 @MyTracePath.inspect_function_execution
 def write_raw_tfrecords():
+    """
+    Task function: Create tfrecords from raw data using an identity 
+    function.
+    """
     if task_state_dictionary["write_raw_tfrecords"] is None:
         original_prefix_string = 'raw_tfrecords'
         pipeline_function(prefix_string=original_prefix_string,
@@ -380,6 +393,11 @@ def write_raw_tfrecords():
 # Pre-requisite: raw data is there
 @MyTracePath.inspect_function_execution
 def transform_tfrecords():
+    """
+    Task function: Call the pipeline function with transform_tfrecords 
+    prefix and provide the preprocessing_fn, which creates transformed 
+    tfrecords.
+    """
     prefix_string = PREFIX_STRING
     pipeline_function(prefix_string=prefix_string,
                       preprocessing_fn=preprocessing_fn)
@@ -389,6 +407,7 @@ def transform_tfrecords():
 # Pre-requisite: None
 @MyTracePath.inspect_function_execution
 def clean_directory():
+    """Task function: cleans the working directory."""
     if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
         shutil.rmtree(WORKING_DIRECTORY)
     assert(not os.path.exists(WORKING_DIRECTORY))
@@ -400,6 +419,14 @@ def clean_directory():
 # Pre-requisite: Data has already been pre-processed
 @MyTracePath.inspect_function_execution
 def train_non_embedding_model():
+    """
+    Task function: trains a model without embeddings by:
+
+    1. Ensuring pre-requisites are completed
+    2. Creating an input layer for the model and splitting out non-embedding
+       section.
+    3. Creates a transformed dataset and trains the model on it.
+    """
     task_prerequisites = task_dag['train_non_embedding_model']
     if not check_prerequisites(task_prerequisites):
         # Do pre-reqs
@@ -407,7 +434,7 @@ def train_non_embedding_model():
             if not task_state_dictionary[task]:
                 perform_task(task)
     assert(check_prerequisites(task_prerequisites))
-    build_raw_inputs(RAW_DATA_FEATURE_SPEC)
+    # build_raw_inputs(RAW_DATA_FEATURE_SPEC)
     prefix_string = PREFIX_STRING
     tft_transform_output = get_tft_transform_output(
         WORKING_DIRECTORY, prefix_string)
@@ -418,7 +445,7 @@ def train_non_embedding_model():
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
         transformed_inputs)
     non_embedding_model = build_non_embedding_model(
-        dnn_inputs, transformed_inputs)
+        dnn_inputs, )
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
     non_embedding_model.fit(transformed_ds, epochs=1, steps_per_epoch=64)
@@ -533,8 +560,8 @@ def train_and_predict_embedding_model():
     TRANSFORMED_DATA_FEATURE_SPEC.pop(LABEL_COLUMN)
     transformed_inputs = build_transformed_inputs(
         TRANSFORMED_DATA_FEATURE_SPEC)
-    dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
-        transformed_inputs)
+    # dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
+    #     transformed_inputs)
     embedding_model = build_embedding_model(transformed_inputs)
     transformed_ds = get_transformed_dataset(
         WORKING_DIRECTORY, prefix_string, batch_size=BATCH_SIZE)
@@ -551,6 +578,7 @@ def train_and_predict_embedding_model():
 
 @MyTracePath.inspect_function_execution
 def closeout_task(task_state_dictionary):
+    """Persist the task state information to disk"""
     if os.path.exists(WORKING_DIRECTORY) and os.path.isdir(WORKING_DIRECTORY):
         with open(task_state_filepath, 'wb') as task_state_file:
             pickle.dump(
@@ -615,6 +643,10 @@ def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
 
 @MyTracePath.inspect_function_execution
 def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
+    """
+    Given a feature spec, produce a dictionary of keras input 
+    layers specifying shape, name, and datatype.
+    """
     transformed_inputs = {}
     for key, spec in TRANSFORMED_DATA_FEATURE_SPEC.items():
         if isinstance(spec, tf.io.VarLenFeature):
@@ -632,6 +664,10 @@ def build_transformed_inputs(TRANSFORMED_DATA_FEATURE_SPEC):
 
 @MyTracePath.inspect_function_execution
 def build_dnn_and_keras_inputs(transformed_inputs):
+    """
+    Splits transformed inputs into two: one part goes into the dense
+    layer, the other part goes to keras preprocessing layers.
+    """
     dnn_input_names = [
         'hashed_trip_and_time',
         'day_of_week',
@@ -668,8 +704,12 @@ def build_dnn_and_keras_inputs(transformed_inputs):
 
 
 @MyTracePath.inspect_function_execution
-def build_non_embedding_model(dnn_inputs, transformed_inputs):
-    dnn_inputs, _ = build_dnn_and_keras_inputs(transformed_inputs)
+def build_non_embedding_model(dnn_inputs, ):
+    """
+    Create a model without embeddings, attach it to its inputs, 
+    compile and return it.
+    """
+    # dnn_inputs, _ = build_dnn_and_keras_inputs(transformed_inputs)
     stacked_inputs = tf.concat(tf.nest.flatten(dnn_inputs), axis=1)
     ht1 = layers.Dense(32, activation='relu', name='ht1')(stacked_inputs)
     ht2 = layers.Dense(8, activation='relu', name='ht2')(ht1)
@@ -683,6 +723,7 @@ def build_non_embedding_model(dnn_inputs, transformed_inputs):
 
 @MyTracePath.inspect_function_execution
 def map_features_and_labels(example):
+    """Split the label from the features"""
     label = example.pop(LABEL_COLUMN)
     return example, label
 # }}}
@@ -692,6 +733,11 @@ def map_features_and_labels(example):
 
 @MyTracePath.inspect_function_execution
 def get_transformed_dataset(working_directory, prefix_string, batch_size):
+    """
+    Read the tfrecords on disk, get the feature spec stored to disk,
+    split the dataset into X, y, batch and make infinite and 
+    return for training.
+    """
     list_of_transformed_files = glob.glob(os.path.join(working_directory,
                                                        prefix_string,
                                                        prefix_string) + '*')
@@ -765,6 +811,11 @@ def build_preprocessing_model(transformed_inputs, dnn_inputs, hashed_trip):
 
 @MyTracePath.inspect_function_execution
 def build_embedding_model(transformed_inputs):
+    """
+    Build, compile, and return a model that uses keras preprocessing 
+    layers in conjunction with the preprocessing already done in tensorflow 
+    transform.
+    """
     dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
         transformed_inputs)
     bucketed_pickup_longitude_intermediary = keras_preprocessing_inputs[
@@ -831,13 +882,17 @@ def build_end_to_end_model(
         working_directory,
         prefix_string,
         new_model):
+    """
+    Connect the raw inputs to the trained model by using the tft_layer
+    to transform raw data to a format that the model preprocessing pipeline
+    already knows how to handle.
+    """
     tft_transform_output = get_tft_transform_output(
         working_directory, prefix_string)
     tft_layer = tft_transform_output.transform_features_layer()
     x = tft_layer(raw_inputs)
     outputs = new_model(x)
     end_to_end_model = tf.keras.Model(raw_inputs, outputs)
-    end_to_end_model.compile(optimizer='adam', loss='mse', metrics='mse')
     return end_to_end_model
 # }}}
 # {{{ Get single batched example
@@ -845,6 +900,12 @@ def build_end_to_end_model(
 
 @MyTracePath.inspect_function_execution
 def get_single_batched_example(working_directory, prefix_string):
+    """
+    Get a single example by reading from tfrecords and interpreting
+    using the feature spec stored by tensorflow transform.
+
+
+    """
     list_of_tfrecord_files = glob.glob(
         os.path.join(
             working_directory,
