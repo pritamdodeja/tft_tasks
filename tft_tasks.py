@@ -3,7 +3,6 @@
 # {{{ Imports
 # Goal: Implement taxicab fare prediction with a tft pipeline with safety
 # checks and a simpler flow.
-from apache_beam.options.pipeline_options import PipelineOptions
 import argparse
 import shutil
 import glob
@@ -142,12 +141,15 @@ def fn_seconds_since_1970(ts_in):
     seconds_since_1970 = tf.cast(seconds_since_1970, tf.float32)
     return seconds_since_1970
 # }}}
-# {{{ small preprocessing fn
+# {{{ preprocessing fn
 
 
 # @MyTracePath.inspect_function_execution
 def preprocessing_fn(inputs):
-    """Preprocess input columns into transformed features."""
+    """
+    Preprocess input columns into transformed features. This is what goes
+    into tensorflow transform/apache beam.
+    """
     # Since we are modifying some features and leaving others unchanged, we
     # start by setting `outputs` to a copy of `inputs.
     transformed = inputs.copy()
@@ -255,7 +257,6 @@ def preprocessing_fn(inputs):
 
 # }}}
 # {{{ pipeline function
-pipeline_options = PipelineOptions(runner='DirectRunner', direct_num_workers=1)
 
 
 @MyTracePath.inspect_function_execution
@@ -266,7 +267,8 @@ def pipeline_function(prefix_string, preprocessing_fn):
     Reads from raw data and uses schema to interpret the data before using
     preprocessing_fn to transform it.
     """
-    with beam.Pipeline(options=pipeline_options) as pipeline:
+    # with beam.Pipeline(options=pipeline_options) as pipeline:
+    with beam.Pipeline() as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
             # Create a TFXIO to read the data with the schema. To do this we
             # need to list all columns in order since the schema doesn't specify
@@ -455,6 +457,14 @@ def train_non_embedding_model():
 # Pre-requisite: Data has already been pre-processed
 @MyTracePath.inspect_function_execution
 def train_embedding_model():
+    """
+    Task function: trains a model with embeddings by:
+
+    1. Ensuring pre-requisites are completed
+    2. Creating an input layer for the model for both dense and preprocessing 
+       layers.
+    3. Creates a transformed dataset and trains the model on it.
+    """
     task_prerequisites = task_dag['train_embedding_model']
     if not check_prerequisites(task_prerequisites):
         # Do pre-reqs
@@ -481,6 +491,7 @@ def train_embedding_model():
 
 @MyTracePath.inspect_function_execution
 def check_prerequisites(task_prerequisites):
+    """Return whether or not all prequisites have been met for a task."""
     prerequisites_met = True
     for task in task_prerequisites:
         prerequisites_met = prerequisites_met and task_state_dictionary[task]
@@ -491,6 +502,10 @@ def check_prerequisites(task_prerequisites):
 
 @MyTracePath.inspect_function_execution
 def view_original_sample_data():
+    """
+    Task function: Gets raw input data and shows the data along 
+    with datatypes and shapes.
+    """
     task_prerequisites = task_dag['view_original_sample_data']
     if not check_prerequisites(task_prerequisites):
         # Do pre-reqs
@@ -509,6 +524,10 @@ def view_original_sample_data():
 # Pre-requisite: transformed tfrecords have been written
 @MyTracePath.inspect_function_execution
 def view_transformed_sample_data():
+    """
+    Take raw input, run it through preprocessing function, and show
+    what it started out as, and what it got transformed to.
+    """
     task_prerequisites = task_dag['view_transformed_sample_data']
     if not check_prerequisites(task_prerequisites):
         # Do pre-reqs
@@ -522,13 +541,6 @@ def view_transformed_sample_data():
         WORKING_DIRECTORY, prefix_string='raw_tfrecords')
     tft_transform_output = get_tft_transform_output(
         WORKING_DIRECTORY, prefix_string)
-    TRANSFORMED_DATA_FEATURE_SPEC = tft_transform_output.transformed_feature_spec()
-    TRANSFORMED_DATA_FEATURE_SPEC.pop(LABEL_COLUMN)
-    transformed_inputs = build_transformed_inputs(
-        TRANSFORMED_DATA_FEATURE_SPEC)
-    dnn_inputs, keras_preprocessing_inputs = build_dnn_and_keras_inputs(
-        transformed_inputs)
-    build_keras_preprocessing_layers(keras_preprocessing_inputs)
     raw_to_preprocessing_model = build_raw_to_preprocessing_model(
         raw_inputs, tft_transform_output)
     transformed_batch_example = raw_to_preprocessing_model(
@@ -543,6 +555,17 @@ def view_transformed_sample_data():
 # Raw tfrecords have been written, data has been preprocessed
 @MyTracePath.inspect_function_execution
 def train_and_predict_embedding_model():
+    """
+    Task function: trains a model with embeddings by:
+
+    1. Ensuring pre-requisites are completed
+    2. Creating an input layer for the model for both dense and preprocessing 
+       layers.
+    3. Creates a transformed dataset and trains the model on it.
+    4. Attaches the raw inputs to make an end-to-end graph that includes 
+       everything
+    5. Takes a single raw input sample and does a prediction on it
+    """
     task_prerequisites = task_dag['train_and_predict_embedding_model']
     if not check_prerequisites(task_prerequisites):
         # Do pre-reqs
@@ -616,6 +639,9 @@ task_dag['train_and_predict_embedding_model'].append('transform_tfrecords')
 
 @MyTracePath.inspect_function_execution
 def perform_task(task_name):
+    """
+    Execute task functions stored in the task_dictionary.
+    """
     if task_name in valid_tasks:
         task_dictionary[task_name]()
         # }}}
@@ -625,6 +651,7 @@ def perform_task(task_name):
 
 @MyTracePath.inspect_function_execution
 def build_raw_inputs(RAW_DATA_FEATURE_SPEC):
+    """Produce keras input layer for raw data for end-to-end model"""
     raw_inputs_for_training = {}
     for key, spec in RAW_DATA_FEATURE_SPEC.items():
         if isinstance(spec, tf.io.VarLenFeature):
@@ -762,6 +789,10 @@ def get_transformed_dataset(working_directory, prefix_string, batch_size):
 
 @MyTracePath.inspect_function_execution
 def build_keras_preprocessing_layers(keras_preprocessing_inputs):
+    """
+    Construct keras preprocessing layers that will feed into the embedding
+    layers in the model.
+    """
     bucketed_pickup_longitude_intermediary = keras_preprocessing_inputs[
         'bucketed_pickup_longitude']
     bucketed_pickup_latitude_intermediary = keras_preprocessing_inputs[
@@ -791,6 +822,11 @@ def build_keras_preprocessing_layers(keras_preprocessing_inputs):
 
 @MyTracePath.inspect_function_execution
 def build_raw_to_preprocessing_model(raw_inputs, tft_transform_output):
+    """
+    Produce a model that transforms raw inputs into the non-embedding
+    component of the model. This uses the tft_layer provided by tft.
+
+    """
     tft_layer = tft_transform_output.transform_features_layer()
     return tf.keras.Model(raw_inputs, tft_layer(raw_inputs))
 # }}}
@@ -903,8 +939,6 @@ def get_single_batched_example(working_directory, prefix_string):
     """
     Get a single example by reading from tfrecords and interpreting
     using the feature spec stored by tensorflow transform.
-
-
     """
     list_of_tfrecord_files = glob.glob(
         os.path.join(
@@ -966,6 +1000,10 @@ optional arguments:
 
 # {{{ Main function
 def main(args):
+    """
+    Manages the task state information and calls the various tasks given
+    input from argparse
+    """
     if os.path.isfile(task_state_filepath):
         with open(task_state_filepath, 'rb') as task_state_file:
             task_state_dictionary = pickle.load(task_state_file)
@@ -983,6 +1021,10 @@ def main(args):
 
 # {{{ Allow importing into other programs
 if __name__ == '__main__':
+    """
+    Gets input from argparse, calls main with those inputs, and
+    produces the visualization if requested by the user
+    """
     args = get_args()
     main(args)
     if args.visualization_filename:
