@@ -963,23 +963,8 @@ def get_single_batched_example(working_directory, prefix_string):
 # {{{ Parser function
 # @MyTracePath.inspect_function_execution
 def get_args():
-    usage_string = '''\
-
-A task based approach to using tensorflow transform.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --task TASKS          Pick tasks from {'train_embedding_model',
-                        'write_raw_tfrecords', 'transform_tfrecords',
-                        'train_and_predict_embedding_model',
-                        'train_non_embedding_model',
-                        'view_original_sample_data',
-                        'clean_directory', 'view_transformed_sample_data'}
-  --visualize_tasks VISUALIZATION_FILENAME
-                        Specify the filename to visualize the execution of tft
-                        tasks(e.g. mlops_pipeline.svg)'''
     parser = argparse.ArgumentParser(
-        prog="tft_tasks.py", usage=usage_string,
+        prog="tft_tasks.py",
         description="A task based approach to using tensorflow transform.")
     parser.add_argument(
         '--task',
