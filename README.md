@@ -72,54 +72,39 @@ These goals will evolve, as my learning evolves.  My personal (selfish) goal is 
 ## Train and predict non-embedding model
 
 The below table is sorted in ascending order by start_time, an unshown field.
-
-╒════╤═══════════════════════════════════╤═══════════════════════════════════╤════════════════╕
-│    │ caller                            │ called                            │   elapsed_time │
-╞════╪═══════════════════════════════════╪═══════════════════════════════════╪════════════════╡
-│  0 │ main                              │ perform_task                      │      16.370039 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  1 │ perform_task                      │ train_and_predict_embedding_model │      16.369750 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  2 │ train_and_predict_embedding_model │ check_prerequisites               │       0.000002 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  3 │ train_and_predict_embedding_model │ perform_task                      │       2.510809 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  4 │ perform_task                      │ write_raw_tfrecords               │       2.510439 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  5 │ write_raw_tfrecords               │ pipeline_function                 │       2.510024 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  6 │ train_and_predict_embedding_model │ perform_task                      │       3.253606 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  7 │ perform_task                      │ transform_tfrecords               │       3.253235 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  8 │ transform_tfrecords               │ pipeline_function                 │       3.252778 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│  9 │ train_and_predict_embedding_model │ check_prerequisites               │       0.000001 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 10 │ train_and_predict_embedding_model │ build_raw_inputs                  │       0.005587 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 11 │ train_and_predict_embedding_model │ get_single_batched_example        │       0.011192 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 12 │ get_single_batched_example        │ get_tft_transform_output          │       0.000010 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 13 │ train_and_predict_embedding_model │ get_tft_transform_output          │       0.000006 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 14 │ train_and_predict_embedding_model │ build_transformed_inputs          │       0.010487 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 15 │ train_and_predict_embedding_model │ build_embedding_model             │       0.328490 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 16 │ build_embedding_model             │ build_dnn_and_keras_inputs        │       0.000004 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 17 │ train_and_predict_embedding_model │ get_transformed_dataset           │       0.169899 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 18 │ get_transformed_dataset           │ get_tft_transform_output          │       0.000008 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 19 │ converted_call                    │ map_features_and_labels           │       0.015560 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 20 │ train_and_predict_embedding_model │ build_end_to_end_model            │       0.891528 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 21 │ build_end_to_end_model            │ get_tft_transform_output          │       0.000009 │
-├────┼───────────────────────────────────┼───────────────────────────────────┼────────────────┤
-│ 22 │ main                              │ closeout_task                     │       0.000121 │
-╘════╧═══════════════════════════════════╧═══════════════════════════════════╧════════════════╛
+{| class="wikitable" style="text-align: left;"
+|+ <!-- caption -->
+|-
+! align="right"|    !! caller                    !! called                     !! align="right"|   elapsed_time
+|-
+| align="right"|  0 || main                      || perform_task               || align="right"|       5.734916
+|-
+| align="right"|  1 || perform_task              || train_non_embedding_model  || align="right"|       5.734569
+|-
+| align="right"|  2 || train_non_embedding_model || check_prerequisites        || align="right"|       0.000003
+|-
+| align="right"|  3 || train_non_embedding_model || perform_task               || align="right"|       4.463674
+|-
+| align="right"|  4 || perform_task              || transform_tfrecords        || align="right"|       4.463251
+|-
+| align="right"|  5 || transform_tfrecords       || pipeline_function          || align="right"|       4.462844
+|-
+| align="right"|  6 || train_non_embedding_model || check_prerequisites        || align="right"|       0.000001
+|-
+| align="right"|  7 || train_non_embedding_model || get_tft_transform_output   || align="right"|       0.000010
+|-
+| align="right"|  8 || train_non_embedding_model || build_transformed_inputs   || align="right"|       0.012516
+|-
+| align="right"|  9 || train_non_embedding_model || build_dnn_and_keras_inputs || align="right"|       0.000005
+|-
+| align="right"| 10 || train_non_embedding_model || build_non_embedding_model  || align="right"|       0.026733
+|-
+| align="right"| 11 || train_non_embedding_model || get_transformed_dataset    || align="right"|       0.171500
+|-
+| align="right"| 12 || get_transformed_dataset   || get_tft_transform_output   || align="right"|       0.000007
+|-
+| align="right"| 13 || converted_call            || map_features_and_labels    || align="right"|       0.015556
+|-
+| align="right"| 14 || main                      || closeout_task              || align="right"|       0.000121
+|}
 
