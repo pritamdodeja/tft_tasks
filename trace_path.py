@@ -149,7 +149,7 @@ class TracePath:
         "elapsed_time":elapsed_time, "start_time": start_time, "end_time":
         end_time})
         print(tabulate(stat_df.sort_values(by="start_time",
-        ignore_index=False)[["caller", "called", "elapsed_time"]],
+        ignore_index=True)[["caller", "called", "elapsed_time"]],
         headers="keys", tablefmt="fancy_grid", showindex=True, floatfmt=".6f"))
         self.stat_df = stat_df
 
