@@ -4,6 +4,8 @@ from functools import wraps
 import time
 import pygraphviz as pgv
 import collections
+import pandas as pd
+from tabulate import tabulate
 # }}}
 # {{{ TracePath class
 
@@ -41,7 +43,7 @@ class TracePath:
                 function_mapping = collections.namedtuple(
                     "function_mapping", "caller called args kwargs")
                 function_measurement = collections.namedtuple(
-                    "function_measurement", "caller called elapsed_time"
+                    "function_measurement", "caller called elapsed_time start_time end_time"
                     )
                 local_mapping_tuple = function_mapping(caller, called, args,
                                                        kwargs)
@@ -51,7 +53,7 @@ class TracePath:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
                 local_measurement_tuple = function_measurement(
-                    caller, called, elapsed_time
+                    caller, called, elapsed_time, start_time, end_time
                     )
                 self.function_measuring_list.append(local_measurement_tuple)
 
@@ -129,7 +131,26 @@ class TracePath:
     # {{{ Draw graph
 
     def draw_graph(self, filename, *args, **kwargs):
+        print(
+            f"Visualizing program execution to "
+            f" {filename}.")
         self.graph.layout()
         self.graph.layout(prog="dot")
         self.graph.draw(filename)
+        # }}}
+        # {{{ Output stats
+    def display_performance(self):
+        callers = [x.caller for x in self.function_measuring_list]
+        calleds = [x.called for x in self.function_measuring_list]
+        elapsed_time = [x.elapsed_time for x in self.function_measuring_list]
+        start_time = [x.start_time for x in self.function_measuring_list]
+        end_time = [x.end_time for x in self.function_measuring_list]
+        stat_df = pd.DataFrame({"caller": callers, "called": calleds,
+        "elapsed_time":elapsed_time, "start_time": start_time, "end_time":
+        end_time})
+        print(tabulate(stat_df.sort_values(by="start_time",
+        ignore_index=False)[["caller", "called", "elapsed_time"]],
+        headers="keys", tablefmt="fancy_grid", showindex=True, floatfmt=".6f"))
+        self.stat_df = stat_df
+
         # }}}

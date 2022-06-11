@@ -994,6 +994,14 @@ optional arguments:
         required=False,
         help='Specify the filename to visualize the execution of tft tasks'
         '(e.g. mlops_pipeline.svg)')
+    parser.add_argument(
+        '--print_performance_metrics',
+        dest='print_performance',
+        action='store_true',
+        required=False,
+        help='specify if you want performance metrics to be printed to the\
+        console')
+    parser.set_defaults(print_performance=False)
     return parser.parse_args()
 # }}}
 
@@ -1029,8 +1037,7 @@ if __name__ == '__main__':
     main(args)
     if args.visualization_filename:
         MyTracePath.construct_graph()
-        print(
-            f"Visualizing program execution to "
-            f" {args.visualization_filename[0]}.")
         MyTracePath.draw_graph(filename=args.visualization_filename[0])
+    if args.print_performance:
+        MyTracePath.display_performance()
 # }}}
