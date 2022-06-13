@@ -4,7 +4,7 @@
 # Goal: Implement taxicab fare prediction with a tft pipeline with safety
 # checks and a simpler flow.
 import tensorflow_metadata
-from typing import List, Dict
+from typing import List, Dict, ClassVar, FrozenSet, Set
 from dataclasses import dataclass, field
 import argparse
 import shutil
@@ -31,11 +31,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
 # print(tf.version.VERSION)
 # }}}
-# {{{ TaxiCabData Data Class
+# {{{ MLMetaData Data Class
 
 
 @dataclass(frozen=True)
-class TaxiCabData:
+class MLMetaData:
     NBUCKETS: int
     LABEL_COLUMN: str
     TEST_FILE_PATH: str
@@ -73,7 +73,7 @@ class TaxiCabData:
 # {{{ Custom default dict class
 
 
-class custom_default_dict(collections.defaultdict):
+class CustomDefaultDict(collections.defaultdict):
     def return_none(self):
         return None
 
@@ -93,15 +93,26 @@ class Task:
     # task_dictionary: Dict[str, callable] = field(init=False)
     #     task_state_dictionary = collections.defaultdict(return_none)
     task_state_dictionary: Dict[str, bool] = field(
-        default_factory=custom_default_dict)
+        default_factory=CustomDefaultDict)
     task_dictionary: Dict[str, callable] = field(default_factory=dict)
     task_dag: Dict[str, str] = field(default_factory=dict, init=False)
     # }}}
+    # {{{ Class variables
+    valid_tasks: FrozenSet[Set[str]] = frozenset({
+        'clean_directory',
+        'write_raw_tfrecords',
+        'transform_tfrecords',
+        'view_original_sample_data',
+        'view_transformed_sample_data',
+        'train_non_embedding_model',
+        'train_embedding_model',
+        'train_and_predict_embedding_model'})
+    # }}}
     # {{{ Properties
 
-    @property
-    def valid_tasks(self):
-        return self.task_dictionary.keys()
+    # @property
+    # def valid_tasks(self):
+    #     return self.task_dictionary.keys()
     # }}}
     # {{{  return_none function
     # def return_none():
@@ -256,7 +267,7 @@ class Task:
                                                            list_of_shapes,
                                                            list_of_dtypes):
             print(
-                f"Tensor {tensor_name} has dtype {tensor_dtype} and"
+                f"Tensor {tensor_name} has dtype {tensor_dtype} and "
                 f"shape {tensor_shape}")
         return None
     # }}}
@@ -757,15 +768,6 @@ class Task:
 # {{{ Parser function
 # @MyTracePath.inspect_function_execution
 def get_args():
-    valid_tasks = [
-        'clean_directory',
-        'write_raw_tfrecords',
-        'transform_tfrecords',
-        'view_original_sample_data',
-        'view_transformed_sample_data',
-        'train_non_embedding_model',
-        'train_embedding_model',
-        'train_and_predict_embedding_model']
     parser = argparse.ArgumentParser(
         prog="tft_tasks.py",
         description="A task based approach to using tensorflow transform.")
@@ -774,8 +776,7 @@ def get_args():
         dest='tasks',
         action='append',
         required=True,
-        # help=f'Pick tasks from {valid_tasks}')
-        help=f'Pick tasks from {valid_tasks}')
+        help=f'Pick tasks from {set(Task.valid_tasks)}')
     parser.add_argument(
         '--visualize_tasks',
         dest='visualization_filename',
@@ -855,7 +856,7 @@ def main(args):
     PREFIX_STRING = 'transformed_tfrecords'
     # }}}
 # {{{ Instantiating instances
-    my_taxicab_data = TaxiCabData(
+    my_taxicab_data = MLMetaData(
         TEST_FILE_PATH=TEST_FILE_PATH,
         TRAIN_FILE_PATH=TRAIN_FILE_PATH,
         NBUCKETS=NBUCKETS,
