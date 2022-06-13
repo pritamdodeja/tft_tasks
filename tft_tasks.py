@@ -851,39 +851,10 @@ def main(args):
     TEST_FILE_PATH = './data/taxi-valid.csv'
     TRAIN_FILE_PATH = './data/taxi-train_toy.csv'
     WORKING_DIRECTORY = './working_area'
-
-    # We need to create the schema, for which we need the raw data feature spec
-    # RAW_DATA_DICTIONARY = {
-    #     key: value for (
-    #         key,
-    #         value) in zip(
-    #         CSV_COLUMNS,
-    #         ALL_DTYPES)}
-
-    # RAW_DATA_FEATURE_SPEC = {
-    #     raw_feature_name: tf.io.FixedLenFeature(
-    #         shape=(1,),
-    #         dtype=RAW_DATA_DICTIONARY[raw_feature_name])
-    #     for raw_feature_name in CSV_COLUMNS}
-
-    # _SCHEMA = dataset_metadata.DatasetMetadata(
-    #     schema_utils.schema_from_feature_spec(RAW_DATA_FEATURE_SPEC)).schema
-    # _SCHEMA = schema_utils.schema_from_feature_spec(RAW_DATA_FEATURE_SPEC)
-
     BATCH_SIZE = 8
     PREFIX_STRING = 'transformed_tfrecords'
     # }}}
 # {{{ Instantiating instances
-    # {{{ fn_seconds_since_1970
-    # @tf.function
-    # def fn_seconds_since_1970(self, ts_in):
-    #     """Compute the seconds since 1970 given a datetime string"""
-    #     seconds_since_1970 = tfa.text.parse_time(
-    #         ts_in, "%Y-%m-%d %H:%M:%S %Z", output_unit="SECOND"
-    #         )
-    #     seconds_since_1970 = tf.cast(seconds_since_1970, tf.float32)
-    #     return seconds_since_1970
-    # }}}
     my_taxicab_data = TaxiCabData(
         TEST_FILE_PATH=TEST_FILE_PATH,
         TRAIN_FILE_PATH=TRAIN_FILE_PATH,
