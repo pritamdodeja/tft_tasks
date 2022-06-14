@@ -25,9 +25,9 @@ import pickle
 import collections
 from trace_path import TracePath
 from functools import partial
-MyTracePath = TracePath(instrument=True, name="MyTracePath")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 # set TF error log verbosity
+MyTracePath = TracePath(instrument=True, name="MyTracePath")
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
 # print(tf.version.VERSION)
 # }}}
@@ -765,35 +765,35 @@ class Task:
 #     seconds_since_1970 = tf.cast(seconds_since_1970, tf.float32)
 #     return seconds_since_1970
 # }}}
-# {{{ Parser function
-# @MyTracePath.inspect_function_execution
-def get_args():
-    parser = argparse.ArgumentParser(
-        prog="tft_tasks.py",
-        description="A task based approach to using tensorflow transform.")
-    parser.add_argument(
-        '--task',
-        dest='tasks',
-        action='append',
-        required=True,
-        help=f'Pick tasks from {set(Task.valid_tasks)}')
-    parser.add_argument(
-        '--visualize_tasks',
-        dest='visualization_filename',
-        action='append',
-        required=False,
-        help='Specify the filename to visualize the execution of tft tasks'
-        '(e.g. mlops_pipeline.svg)')
-    parser.add_argument(
-        '--print_performance_metrics',
-        dest='print_performance',
-        action='store_true',
-        required=False,
-        help='specify if you want performance metrics to be printed to the\
-        console')
-    parser.set_defaults(print_performance=False)
-    return parser.parse_args()
-# }}}
+# # {{{ Parser function
+# # @MyTracePath.inspect_function_execution
+# def get_args():
+#     parser = argparse.ArgumentParser(
+#         prog="tft_tasks.py",
+#         description="A task based approach to using tensorflow transform.")
+#     parser.add_argument(
+#         '--task',
+#         dest='tasks',
+#         action='append',
+#         required=True,
+#         help=f'Pick tasks from {set(Task.valid_tasks)}')
+#     parser.add_argument(
+#         '--visualize_tasks',
+#         dest='visualization_filename',
+#         action='append',
+#         required=False,
+#         help='Specify the filename to visualize the execution of tft tasks'
+#         '(e.g. mlops_pipeline.svg)')
+#     parser.add_argument(
+#         '--print_performance_metrics',
+#         dest='print_performance',
+#         action='store_true',
+#         required=False,
+#         help='specify if you want performance metrics to be printed to the\
+#         console')
+#     parser.set_defaults(print_performance=False)
+#     return parser.parse_args()
+# # }}}
 # {{{ Main function
 
 
@@ -1077,6 +1077,11 @@ def main(args):
             continue
         else:
             my_tasks.perform_task(task)
+    if args.visualization_filename:
+        MyTracePath.construct_graph()
+        MyTracePath.draw_graph(filename=args.visualization_filename[0])
+    if args.print_performance:
+        MyTracePath.display_performance()
     my_tasks.closeout_task()
     # }}}
 
@@ -1085,15 +1090,11 @@ def main(args):
 
 
 if __name__ == '__main__':
+    pass
     """
     Gets input from argparse, calls main with those inputs, and
     produces the visualization if requested by the user
     """
-    args = get_args()
-    main(args)
-    if args.visualization_filename:
-        MyTracePath.construct_graph()
-        MyTracePath.draw_graph(filename=args.visualization_filename[0])
-    if args.print_performance:
-        MyTracePath.display_performance()
+    # args = get_args()
+    # main(args)
 # }}}

@@ -5,24 +5,18 @@ A task based approach to using tensorflow transform.
 Usage instructions:
 
 ```
-usage: tft_tasks.py [-h] --task TASKS [--visualize_tasks VISUALIZATION_FILENAME]
-                    [--print_performance_metrics]
+usage: tft_tasks_cli.py [-h] --task TASKS [--visualize_tasks VISUALIZATION_FILENAME] [--print_performance_metrics]
 
 A task based approach to using tensorflow transform.
 
 optional arguments:
   -h, --help            show this help message and exit
-  --task TASKS          Pick tasks from {'train_embedding_model',
-                        'train_and_predict_embedding_model', 'write_raw_tfrecords',
-                        'clean_directory', 'view_transformed_sample_data',
-                        'train_non_embedding_model', 'view_original_sample_data',
-                        'transform_tfrecords'}
+  --task TASKS          Pick tasks from {'clean_directory', 'train_embedding_model', 'view_original_sample_data', 'train_non_embedding_model',
+                        'view_transformed_sample_data', 'train_and_predict_embedding_model', 'transform_tfrecords', 'write_raw_tfrecords'}
   --visualize_tasks VISUALIZATION_FILENAME
-                        Specify the filename to visualize the execution of tft
-                        tasks(e.g. mlops_pipeline.svg)
+                        Specify the filename to visualize the execution of tft tasks(e.g. mlops_pipeline.svg)
   --print_performance_metrics
-                        specify if you want performance metrics to be printed to the
-                        console
+                        specify if you want performance metrics to be printed to the console
 ```
 
 To execute the full lifecycle and visualize it, enter the below:
@@ -32,7 +26,7 @@ If you have all of the prequisites in requirements.txt, you should see something
 </p>
 
 ```
-python tft_tasks.py --task train_non_embedding_model --visualize_tasks mlops_pipeline_non_embedding_model.svg
+python tft_tasks_cli.py --task train_non_embedding_model --visualize_tasks mlops_pipeline_non_embedding_model.svg
 ```
 
 # Goals of project
