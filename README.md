@@ -5,14 +5,15 @@ A task based approach to using tensorflow transform.
 Usage instructions:
 
 ```
+python tft_tasks_cli.py -h
 usage: tft_tasks_cli.py [-h] --task TASKS [--visualize_tasks VISUALIZATION_FILENAME] [--print_performance_metrics]
 
 A task based approach to using tensorflow transform.
 
 optional arguments:
   -h, --help            show this help message and exit
-  --task TASKS          Pick tasks from {'clean_directory', 'train_embedding_model', 'view_original_sample_data', 'train_non_embedding_model',
-                        'view_transformed_sample_data', 'train_and_predict_embedding_model', 'transform_tfrecords', 'write_raw_tfrecords'}
+  --task TASKS          Pick tasks from {'view_transformed_sample_data', 'clean_directory', 'train_non_embedding_model', 'train_and_predict_non_embedding_model',
+                        'preprocess_raw_data', 'train_embedding_model', 'train_and_predict_embedding_model', 'transform_raw_data', 'view_original_sample_data'}
   --visualize_tasks VISUALIZATION_FILENAME
                         Specify the filename to visualize the execution of tft tasks(e.g. mlops_pipeline.svg)
   --print_performance_metrics
