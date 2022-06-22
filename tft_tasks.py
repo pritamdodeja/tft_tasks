@@ -510,7 +510,7 @@ class Task:
         return transformed_ds
 
         # }}}
-        # {{{
+        # {{{ get_subset function
     @MyTracePath.inspect_function_execution
     def get_subset(self, some_dict, some_columns):
         getter = itemgetter(*some_columns)

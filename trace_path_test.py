@@ -13,6 +13,11 @@ class TestTracePathConstructor(unittest.TestCase):
         self.TestTracePath = TracePath(name="TestTracePath")
         self.TestTracePathInstrumentationDisabled = TracePath(
             name="TestTracePathInstrumentationDisabled", instrument=False)
+        @self.TestTracePathInstrumentationDisabled.inspect_function_execution
+        def instrumentation_disabled_function(x):
+            return x
+        instrumentation_disabled_function(2)
+
 
     def test_constructor(self):
         self.assertEqual(len(self.TestTracePath.function_mapping_list), 0)
@@ -30,6 +35,7 @@ class TestTracePathConstructor(unittest.TestCase):
                 self.TestTracePath.function_measuring_list,
                 list))
         self.assertTrue(isinstance(self.TestTracePath.graph, pgv.AGraph))
+        self.assertEqual(len(self.TestTracePathInstrumentationDisabled.function_mapping_list), 0)
 
 # }}}
 # {{{ Test Instrumentation Decorator
@@ -52,10 +58,15 @@ class TestTracePathInspectDecorator(unittest.TestCase):
         @self.TestTracePath.inspect_function_execution
         def newfunc(x):
             return x
+
+        def not_on_stack(x):
+            return newfunc(x)
+
         self.EmptyTestTracePath.construct_graph()
         # Instrument another function and check if we don't change behavior
         # and we capture arguments and execution time
         newfunc(2)
+        not_on_stack(2)
         self.empty_graph_file_name = tempfile.mktemp(suffix='.svg')
         self.graph_file_name = tempfile.mktemp(suffix='.svg')
         # }}}
@@ -70,40 +81,44 @@ class TestTracePathInspectDecorator(unittest.TestCase):
     # {{{ Test Non Empty Case
 
 
-def test_inspect_function_non_empty_execution(self):
-    # self.assertEqual(self.myfunc(2, y="the_sun"), 2)
-    # Check if function invocations captured properly
-    self.assertEqual(len(self.TestTracePath.function_mapping_list), 2)
-    self.assertEqual(len(self.TestTracePath.function_measuring_list), 2)
-    self.assertEqual(
-        self.TestTracePath.function_mapping_list[0].called,
-        'myfunc')
-    self.assertEqual(
-        self.TestTracePath.function_mapping_list[0].caller,
-        'setUp')
-    self.assertEqual(
-        str(self.TestTracePath.function_mapping_list[0].args),
-        '(2,)')
-    self.assertEqual(
-        self.TestTracePath.function_mapping_list[0].kwargs, {
-            'y': 'the_sun'})
-    self.assertGreater(
-        self.TestTracePath.function_measuring_list[0].elapsed_time, 0)
-    self.assertEqual(
-        self.TestTracePath.function_mapping_list[1].called,
-        'newfunc')
-    self.assertEqual(
-        self.TestTracePath.function_mapping_list[1].caller,
-        'setUp')
-    self.assertEqual(
-        str(self.TestTracePath.function_mapping_list[0].args),
-        '(2,)')
-    self.assertGreater(
-        self.TestTracePath.function_measuring_list[1].elapsed_time, 0)
-    # Ensure graph is empty because we haven't explicitly added anything
-    self.assertEqual(self.TestTracePath.graph.number_of_nodes(), 0)
-    self.assertEqual(self.TestTracePath.graph.number_of_edges(), 0)
-    # self.assertEqual(newfunc(2), 2)
+    def test_inspect_function_non_empty_execution(self):
+        # self.assertEqual(self.myfunc(2, y="the_sun"), 2)
+        # Check if function invocations captured properly
+        self.assertEqual(len(self.TestTracePath.function_mapping_list), 3)
+        self.assertEqual(len(self.TestTracePath.function_measuring_list), 3)
+        self.assertEqual(
+            self.TestTracePath.function_mapping_list[0].called,
+            'myfunc')
+        self.assertEqual(
+            self.TestTracePath.function_mapping_list[0].caller,
+            'setUp')
+        self.assertEqual(
+            str(self.TestTracePath.function_mapping_list[0].args),
+            '(2,)')
+        self.assertEqual(
+            self.TestTracePath.function_mapping_list[0].kwargs, {
+                'y': 'the_sun'})
+        self.assertGreater(
+            self.TestTracePath.function_measuring_list[0].elapsed_time, 0)
+        self.assertEqual(
+            self.TestTracePath.function_mapping_list[1].called,
+            'newfunc')
+        self.assertEqual(
+            self.TestTracePath.function_mapping_list[1].caller,
+            'setUp')
+        self.assertEqual(
+            str(self.TestTracePath.function_mapping_list[0].args),
+            '(2,)')
+        self.assertGreater(
+            self.TestTracePath.function_measuring_list[1].elapsed_time, 0)
+        # Ensure graph is empty because we haven't explicitly added anything
+        self.assertEqual(self.TestTracePath.graph.number_of_nodes(), 0)
+        self.assertEqual(self.TestTracePath.graph.number_of_edges(), 0)
+        self.TestTracePath.construct_graph()
+        not_on_stack_node = self.TestTracePath.get_node('not_on_stack')
+        self.assertEqual(not_on_stack_node.attr["color"], "orange")
+        self.TestTracePath.display_performance()
+        self.assertEqual(len(self.TestTracePath.stat_df), 3)
     # }}}
 # }}}
 # {{{ Test Graph Construction
