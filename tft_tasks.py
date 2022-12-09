@@ -45,12 +45,12 @@ class MLMetaData:
     RAW_DATA_LOCATION: str = field(init=True)
     DEFAULT_DTYPES: List[tf.DType] = field(init=True)
     ALL_DTYPES: List[tf.DType] = field(init=True)
+    SCHEMA: tensorflow_metadata.proto.v0.schema_pb2.Schema = field(init=True)
     CSV_COLUMNS: List[str] = field(default_factory=list)
     STRING_COLS: List[str] = field(default_factory=list)
     NUMERIC_COLS: List[str] = field(default_factory=list)
     RAW_DATA_DICTIONARY: Dict[str, tf.DType] = field(init=False)
     RAW_DATA_FEATURE_SPEC: Dict[str, tf.DType] = field(init=False)
-    _SCHEMA: tensorflow_metadata.proto.v0.schema_pb2.Schema = field(init=False)
     BATCH_SIZE: int = 8
 
     def __post_init__(self):
@@ -69,9 +69,9 @@ class MLMetaData:
             self,
             "RAW_DATA_FEATURE_SPEC",
             raw_data_feature_spec)
-        schema = schema_utils.schema_from_feature_spec(
-            self.RAW_DATA_FEATURE_SPEC)
-        object.__setattr__(self, "_SCHEMA", schema)
+        # schema = schema_utils.schema_from_feature_spec(
+        #     self.RAW_DATA_FEATURE_SPEC)
+        # object.__setattr__(self, "SCHEMA", schema)
 
 # }}}
 # {{{ Custom default dict class
@@ -262,7 +262,7 @@ class Task:
                 csv_tfxio = tfxio.BeamRecordCsvTFXIO(
                     physical_format='text',
                     column_names=mydataclass.CSV_COLUMNS,
-                    schema=mydataclass._SCHEMA)
+                    schema=mydataclass.SCHEMA)
                 raw_data = (
                     pipeline | 'ReadTrainData' >> beam.io.ReadFromText(
                         file_pattern=mydataclass.TRAIN_FILE_PATH,
@@ -814,11 +814,11 @@ def main(args):
     """
     TRAIN_FILE_PATH = './data/taxi-train_toy.csv'
     train_stats = tfdv.generate_statistics_from_csv(data_location=TRAIN_FILE_PATH)
-    schema = tfdv.infer_schema(statistics=train_stats)
-    CSV_COLUMNS = [feature.name for feature in schema.feature]
+    SCHEMA = tfdv.infer_schema(statistics=train_stats)
+    CSV_COLUMNS = [feature.name for feature in SCHEMA.feature]
     LABEL_COLUMN = "fare_amount"
 
-    datatype_in_numeric = [feature.type for feature in schema.feature]
+    datatype_in_numeric = [feature.type for feature in SCHEMA.feature]
 
     mapping_dictionary = dict(
         {
@@ -874,7 +874,9 @@ def main(args):
         ALL_DTYPES=ALL_DTYPES,
         BATCH_SIZE=BATCH_SIZE,
         TRANSFORMED_DATA_LOCATION=TRANSFORMED_DATA_LOCATION,
-        RAW_DATA_LOCATION=RAW_DATA_LOCATION)
+        RAW_DATA_LOCATION=RAW_DATA_LOCATION,
+        SCHEMA=SCHEMA,
+    )
     my_tasks = Task(
         WORKING_DIRECTORY=WORKING_DIRECTORY,
         )
