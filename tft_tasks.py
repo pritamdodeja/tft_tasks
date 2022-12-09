@@ -26,6 +26,7 @@ from trace_path import TracePath
 from functools import partial
 from operator import itemgetter
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+import tensorflow_data_validation as tfdv
 # set TF error log verbosity
 MyTracePath = TracePath(instrument=True, name="MyTracePath")
 logger = logging.getLogger("tensorflow").setLevel(logging.INFO)
@@ -47,7 +48,6 @@ class MLMetaData:
     CSV_COLUMNS: List[str] = field(default_factory=list)
     STRING_COLS: List[str] = field(default_factory=list)
     NUMERIC_COLS: List[str] = field(default_factory=list)
-    DEFAULTS: List = field(default_factory=list)
     RAW_DATA_DICTIONARY: Dict[str, tf.DType] = field(init=False)
     RAW_DATA_FEATURE_SPEC: Dict[str, tf.DType] = field(init=False)
     _SCHEMA: tensorflow_metadata.proto.v0.schema_pb2.Schema = field(init=False)
@@ -504,7 +504,6 @@ class Task:
             lambda X: self.map_features_and_labels(
                 mydataclass, X))
 
-        # ipdb()
         transformed_ds = transformed_ds.batch(
             batch_size=mydataclass.BATCH_SIZE).repeat()
         return transformed_ds
@@ -543,7 +542,6 @@ class Task:
             lambda X: self.map_features_and_labels(
                 mydataclass, X))
 
-        # ipdb()
         transformed_ds = transformed_ds.batch(
             batch_size=mydataclass.BATCH_SIZE).repeat()
         return transformed_ds
@@ -814,58 +812,54 @@ def main(args):
     Manages the task state information and calls the various tasks given
     input from argparse
     """
-    CSV_COLUMNS = [
-        "key",
-        "fare_amount",
-        "pickup_datetime",
-        "pickup_longitude",
-        "pickup_latitude",
-        "dropoff_longitude",
-        "dropoff_latitude",
-        "passenger_count",
-        ]
-
+    TRAIN_FILE_PATH = './data/taxi-train_toy.csv'
+    train_stats = tfdv.generate_statistics_from_csv(data_location=TRAIN_FILE_PATH)
+    schema = tfdv.infer_schema(statistics=train_stats)
+    CSV_COLUMNS = [feature.name for feature in schema.feature]
     LABEL_COLUMN = "fare_amount"
+
+    datatype_in_numeric = [feature.type for feature in schema.feature]
+
+    mapping_dictionary = dict(
+        {
+            # 2: tf.dtypes.int64,
+            2: tf.dtypes.float32,
+            1: tf.dtypes.string,
+            3: tf.dtypes.float32,
+        }
+    )
+
+    # Currently mapping to float because of issue with integer mapping that
+    # causes something similar to https://github.com/tensorflow/tensorflow/issues/33721
+    ALL_DTYPES = [ mapping_dictionary[numeric] for numeric in datatype_in_numeric]
+    datatype_dictionary = dict(zip(CSV_COLUMNS, ALL_DTYPES))
+
+    STRING_COLS = [feature_name for feature_name, dtype in
+                   datatype_dictionary.items() if dtype == tf.string]
 
     STRING_COLS = ["pickup_datetime"]
 
-    NUMERIC_COLS = [
-        "pickup_longitude",
-        "pickup_latitude",
-        "dropoff_longitude",
-        "dropoff_latitude",
-        "passenger_count",
-        ]
+    FLOAT_COLS = [feature_name for feature_name, dtype in
+                   datatype_dictionary.items() if dtype == tf.float32]
 
-    DEFAULTS = [["na"], [0.0], ["na"], [0.0], [0.0], [0.0], [0.0], [0.0], ]
+    INT_COLS = [feature_name for feature_name, dtype in
+                   datatype_dictionary.items() if dtype == tf.int64]
 
-    DEFAULT_DTYPES = [
-        tf.float32,
-        tf.string,
-        tf.float32,
-        tf.float32,
-        tf.float32,
-        tf.float32,
-        tf.float32]
+    NUMERIC_COLS = FLOAT_COLS + INT_COLS
 
-    ALL_DTYPES = [
-        tf.string,
-        tf.float32,
-        tf.string,
-        tf.float32,
-        tf.float32,
-        tf.float32,
-        tf.float32,
-        tf.float32]
+    DEFAULT_DTYPES = ALL_DTYPES.copy()
+    label_index = CSV_COLUMNS.index(LABEL_COLUMN)
+    del(DEFAULT_DTYPES[label_index])
 
     NBUCKETS = 10
 
     TEST_FILE_PATH = './data/taxi-valid.csv'
-    TRAIN_FILE_PATH = './data/taxi-train_toy.csv'
     WORKING_DIRECTORY = './working_area'
     BATCH_SIZE = 8
     TRANSFORMED_DATA_LOCATION = 'transformed_tfrecords'
     RAW_DATA_LOCATION = 'raw_tfrecords'
+
+
     # }}}
 # {{{ Instantiating instances
     my_taxicab_data = MLMetaData(
@@ -876,7 +870,6 @@ def main(args):
         LABEL_COLUMN=LABEL_COLUMN,
         STRING_COLS=STRING_COLS,
         NUMERIC_COLS=NUMERIC_COLS,
-        DEFAULTS=DEFAULTS,
         DEFAULT_DTYPES=DEFAULT_DTYPES,
         ALL_DTYPES=ALL_DTYPES,
         BATCH_SIZE=BATCH_SIZE,
@@ -884,9 +877,6 @@ def main(args):
         RAW_DATA_LOCATION=RAW_DATA_LOCATION)
     my_tasks = Task(
         WORKING_DIRECTORY=WORKING_DIRECTORY,
-        # task_completed = {},
-        # task_dictionary = {},
-        # task_dag = task_dag
         )
 # }}}
 # {{{ cleaning up variables
@@ -897,7 +887,6 @@ def main(args):
     del(LABEL_COLUMN)
     del(STRING_COLS)
     del(NUMERIC_COLS)
-    del(DEFAULTS)
     del(DEFAULT_DTYPES)
     del(ALL_DTYPES)
     del(BATCH_SIZE)
@@ -917,7 +906,7 @@ def main(args):
         transformed = inputs.copy()
         transformed['passenger_count'] = tft.scale_to_0_1(
             inputs['passenger_count'])
-        # cannot use the below in tft as managing those learned values needs 
+        # cannot use the below in tft as managing those learned values need
         # to be
         # managed carefully
         # normalizer = tf.keras.layers.Normalization(axis=None,
@@ -1089,11 +1078,13 @@ def main(args):
             continue
         else:
             my_tasks.perform_task(task)
-    if args.visualization_filename:
-        MyTracePath.construct_graph()
-        MyTracePath.draw_graph(filename=args.visualization_filename[0])
-    if args.print_performance:
-        MyTracePath.display_performance()
+    if hasattr(args, 'visualization_filename'):
+        if(args.visualization_filename is not None):
+            MyTracePath.construct_graph()
+            MyTracePath.draw_graph(filename=args.visualization_filename[0])
+    if hasattr(args,'print_performance'):
+        if(args.print_performance):
+            MyTracePath.display_performance()
     my_tasks.closeout_task()
     # }}}
 
@@ -1104,6 +1095,12 @@ def main(args):
 
 if __name__ == '__main__':
     # We no longer provide an entry point from here.
+    # If you want to run in an interactive session, do the following after
+    # sourcing everything in this file except this block
+    # import argparse
+    # args = argparse.Namespace()
+    # args.tasks = ['train_and_predict_embedding_model']
+    # main(args)
     print("Please access via tft_tasks_cli.py or by importing tft_tasks.")
     """
     Gets input from argparse, calls main with those inputs, and
